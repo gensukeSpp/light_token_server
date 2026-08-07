@@ -1,0 +1,24 @@
+{
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "warning",
+        "reportUnusedImport": "none",
+        "reportGeneralTypeIssues": "warning"
+    },
+    "ruff.lint.enable": false,
+    "[python]": {
+        // デフォルトのフォーマッタをBlackに設定
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        // ファイル保存時に自動でフォーマットを実行する
+        "editor.formatOnSave": true
+    },
+    // 1行の最大文字数を119文字に緩和（デフォルトは79文字）
+    "flake8.args": [
+        "--max-line-length=119",
+        "--ignore=E203,W503,W504"
+    ],
+    // Blackの1行の文字数制限を変更したい場合（例: 119文字）
+    "black-formatter.args": [
+        "--line-length=119"
+    ],
+}
