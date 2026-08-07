@@ -9,53 +9,67 @@ is migrating the current Flask/MySQL base to **FastAPI / PostgreSQL / Pydantic /
 htmx / uv / pytest**. Its steps 1–7 are not strictly ordered and refactoring anytime
 is allowed — the stated "目的" (goal) is what matters, not a checklist.
 
-## Current state (IMPORTANT — repo is NOT yet FastAPI)
-- `app/` code is still **Flask** (`flask`, `flask_login`, `flask_cors`,
-  `flask_sqlalchemy`, `flask_wtf`, `werkzeug`, `jwt`). Migration to FastAPI is the task.
-- **No dependency manifest**: no pyproject.toml / requirements.txt / uv.lock / setup.py.
-  Deps exist only via imports and the list in requirement-02.md.
-- `tests/` is empty. `.github/` has **no workflows** — only `agents/pr-review.md`
-  (an AI prompt, not CI). So there are **no build/test/lint commands to run yet**.
-- **No `app/__init__.py`** → `from app import app, db` cannot resolve; the package is
-  currently not importable/runnable as a unit.
+## Current state (partially migrated)
+- **Done:** dependency manifest (`pyproject.toml`, `uv.lock`, `.python-version` pin 3.13),
+  and the **login flow is now FastAPI**.
+- **FastAPI modules:** `app/main.py` (FastAPI app + `SessionMiddleware` + `include_router`),
+  `app/routers/login.py` (`/login` GET/POST, `/logout`, `/` link page),
+  `app/schemas.py` (Pydantic), `app/security.py` (`login_required` via `get_db`),
+  `app/config.py` (env settings), `app/database_base.py` (`engine`/`SessionLocal`/`Base`/`get_db`).
+- **Templates** are plain HTML (Bootstrap removed): `base.html`, `login.html`, `index.html`.
+  `logout.html` is a dead leftover from the old Flask app.
+- **Still Flask (next stage, do NOT touch yet):** `app/routes.py` (CRUD / access-token
+  issuance) and `app/auth_middleware.py` (JWT `token_required` / `issue_token`). `main.py`
+  must NOT import these until they're migrated.
+- `app/models.py` keeps the legacy schema shape (UPPERCASE columns, tables `M_STAFFINFO`
+  `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`).
+- **DB is still MySQL** until the user migrates it to PostgreSQL. Tests do NOT need a real DB.
 
-## Dev environment (target, per requirement-02)
-- Python 3.13.11; dependency management via **`uv`**.
-- Target stack: FastAPI, uvicorn, SQLAlchemy, Alembic, Jinja2, httpx, Pydantic, pytest.
+## IMPORTANT: activate the venv before uv/pytest
+- The project is **not a pre-activated venv**. Before ANY `uv` or `pytest`/`uvicorn` command, run:
+  ```bash
+  source .venv/bin/activate
+  ```
+  Then use `uv ...` / `uv run pytest ...` / `uvicorn app.main:app`. (The venv already has
+  FastAPI + testing deps installed via uv.)
+
+## Dev environment
+- Python **3.13** (pinned in `.python-version`); dependency management via **`uv`**.
+- Stack: FastAPI, uvicorn, SQLAlchemy, Alembic, Jinja2, httpx, Pydantic, PyJWT,
+  psycopg(binary), python-dotenv, python-multipart, itsdangerous (session), werkzeug (password).
 - DB: **PostgreSQL** (from MySQL); Render + Neon planned. Templates: **htmx** (no Bootstrap).
 
 ## Build & test
-- Nothing is runnable today (no manifest). Intended once scaffolded with uv:
-  - deps: `uv add fastapi uvicorn sqlalchemy alembic jinja2 httpx pydantic pytest`
-  - tests: `uv run pytest` (tests go under `tests/`)
-- Add to shell history: re-derive commands from the real manifest once it exists;
-  don't assume a test command exists before pyproject/uv.lock does.
+- Tests: `uv run pytest` (tests live under `tests/`; `tests/test_health.py` + `tests/test_login.py`).
+  pytest config lives in `pyproject.toml` (`testpaths`, `pythonpath = ["."]`).
+- Run the server: `uvicorn app.main:app` → `/health` returns `{"status":"ok"}`.
 
-## Conventions (observed in `app/`)
-- Models in `models.py`: legacy UPPERCASE columns (STAFFID, TEAM_CODE, …), tables
-  `M_STAFFINFO`, `M_TEAM`, `M_LOGGININFO`, `T_TIMELINE_EVENT`; `Base` comes from
-  `database_base.py`. Keep the old DB schema shape ("旧アプリの形式").
+## Conventions
+- Models keep the legacy schema; `Base` comes from `database_base.py`.
+  `EventORM.to_dict()` emits ISO `"%Y-%m-%dT%H:%M:%S.000Z"` — preserve it.
 - Passwords: `werkzeug` `generate_password_hash` / `check_password_hash`
-  (`StaffLogin.check_password`).
-- Auth: JWT **HS256** (`jwt` lib); `issue_token()` → payload `{user_id, group_id}`;
-  `token_required` decorator verifies (returns `(auth_user, extension)`).
-- CORS origins: `os.getenv("CLOUD_TIMETABLE4")` + `http://localhost:5173`. DB URL built
-  from env `DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME` (dotenv).
-- UI copy is Japanese; templates in `app/templates/` (`base.html`, `login.html`,
-  `logout.html`).
-- `EventORM.to_dict()` emits ISO `"%Y-%m-%dT%H:%M:%S.000Z"` — preserve that format.
-- Existing code has many stray `print()` and commented-out blocks; requirement-02 says
-  remove stray prints and inappropriate comments during migration.
+  (`StaffLogin.check_password`). Keep werkzeug so existing hashes verify.
+- Auth: httpOnly session cookie via `SessionMiddleware` (`SECRET_KEY` from env).
+  JWT HS256 (`PyJWT`) is used by the not-yet-migrated `auth_middleware.py`.
+- DB access in FastAPI code **must** go through the `get_db` dependency
+  (`db: Session = Depends(get_db)`), never a bare `SessionLocal()` — that's what lets tests
+  override with SQLite.
+- Forms: Pydantic schema + `Annotated[LoginForm, Form()]` (needs `python-multipart`).
+- CORS origins: `os.getenv("CLOUD_TIMETABLE4")` + `http://localhost:5173`. DB URL built from
+  env `DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME` (or `DATABASE_URL`).
+- UI copy is Japanese; templates in `app/templates/`.
+- Starlette 1.4.1: `TemplateResponse(request, name, {…})` is request-first, and you must
+  `raise HTTPException(303, headers={"Location": …})` rather than `raise RedirectResponse`.
+  See the `flask-to-fastapi-migration` skill for details.
 
 ## Pitfalls
 - **Do NOT run DB migrations** — the PostgreSQL migration (step 5 of requirement-02)
   is done by the user personally ("ここは私が行う"). Prepare Alembic, leave the run to them.
 - `.venv/` and `.env` are gitignored — do not read or commit `.env` (DB creds + secrets).
-- Dead leftover references in current code to drop/clean during migration:
-  - `login.py` imports `from .forms import LoginForm`, but the file is `form.py`.
-  - `url_for("select_links")` and `render_template("logout_mes.html")` in `login.py`
-    point at routes/templates that don't exist; `select_links` is to be removed.
-- No `app/__init__.py` → package won't import until one exists (the FastAPI restructure
-  should add it).
+- `routes.py` / `auth_middleware.py` still import Flask and are next-stage: leave them,
+  and make sure `main.py` does not import them until migrated.
+- Don't `raise RedirectResponse(...)` (Starlette 1.4.1 rejects it); use `HTTPException` 303.
+- Tests use SQLite in-memory with `poolclass=StaticPool` + `connect_args={"check_same_thread":
+  False}` (TestClient runs the app in a worker thread; without StaticPool the tables vanish).
 - If `../time-table-to-line` exists on the machine, match the token shape and link URL
   to how that app consumes them — informational, not a build dependency.
