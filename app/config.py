@@ -20,3 +20,4 @@ def _db_url() -> str:
 DB_URL = os.getenv("DATABASE_URL", _db_url())
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
 ENV = os.getenv("ENV", "development")
+APP_URL = os.getenv("CLOUD_TIMETABLE4", "http://localhost:5173")

@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
+from ..config import APP_URL
 from ..database_base import get_db
 from ..models import StaffLogin
 from ..schemas import LoginForm
@@ -55,5 +56,5 @@ def do_logout(request: Request):
 @router.get("/")
 def index(request: Request, user: StaffLogin = Depends(login_required)):
     return templates.TemplateResponse(
-        request, "index.html", {"user": user}
+        request, "index.html", {"user": user, "app_url": APP_URL}
     )
