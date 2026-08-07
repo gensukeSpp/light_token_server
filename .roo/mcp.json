@@ -1,0 +1,48 @@
+{
+	"mcpServers": {
+		"serena": {
+			"command": "uvx",
+			"args": [
+				"--from",
+				"git+https://github.com/oraios/serena",
+				"serena",
+				"serena-mcp-server",
+				"--context",
+				"ide-assistant",
+				"--project",
+				"/home/nabu_dvl/workspace/the-calendar-to-timeline/light_token_server"
+			],
+			"disabled": true,
+			"alwaysAllow": []
+		},
+		"context7": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@upstash/context7-mcp@latest"
+			]
+		},
+    "Filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "."
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args":[
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "linksee": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "linksee-memory"
+      ]
+    }
+	}
+}

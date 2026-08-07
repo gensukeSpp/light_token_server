@@ -1,10 +1,19 @@
 {% extends "base.html" %}
-{% import 'bootstrap/wtf.html' as wtf %}
-{% block app_content %}
-<h1>Sign In</h1>
-<div class="row">
-    <div class="col-md-4">
-        {{ wtf.quick_form(form) }} 
-    </div>
-</div>
+{% block title %}ログイン{% endblock %}
+{% block content %}
+<h1>サインイン</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="/login">
+    <p>
+        <label>社員番号<br>
+            <input type="text" name="STAFFID" required>
+        </label>
+    </p>
+    <p>
+        <label>パスワード<br>
+            <input type="password" name="PASSWORD" required>
+        </label>
+    </p>
+    <button type="submit">サインイン</button>
+</form>
 {% endblock %}

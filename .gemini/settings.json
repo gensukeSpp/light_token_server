@@ -1,0 +1,42 @@
+{
+  "mcp": {
+    "allowed": [
+      "serena",
+      "playwright",
+      "linksee"
+    ]
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/home/nabu_dvl/workspace/the-calendar-to-timeline/light_token_server"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "linksee": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "linksee-memory"
+      ]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(gh *)"
+    ]
+  }
+}
