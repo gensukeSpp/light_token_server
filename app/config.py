@@ -34,10 +34,11 @@ def _db_url() -> str:
 
 
 DB_URL = os.getenv("DATABASE_URL") or _db_url()
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
 ENV = os.getenv("ENV", "development")
-SECRET_KEY = os.getenv("SECRET_KEY")
-if ENV == "production" and not SECRET_KEY:
+# 開発用デフォルトを1回だけ設定し、本番では env 未設定時にのみ厳格に失敗させる。
+# 分岐による重複代入を排除し、いかなる環境でも SECRET_KEY が None にならないようにする。
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
+if ENV == "production" and not os.getenv("SECRET_KEY"):
     raise RuntimeError("SECRET_KEY must be set in production")
 APP_URL = os.getenv("CLOUD_TIMETABLE4", "http://localhost:5173")
 

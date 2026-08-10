@@ -49,9 +49,27 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="invalid token") from e
 
 
+def _bearer_token(request: Request) -> str | None:
+    """Authorization: Bearer <token> ヘッダーから token を取り出す。無ければ None。"""
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip()
+
+
 def get_token_claims(request: Request, expected_type: str) -> dict:
-    cookie = ACCESS_COOKIE if expected_type == "access" else REFRESH_COOKIE
-    token = request.cookies.get(cookie)
+    """アクセス検証用 claims を返す。
+
+    Authorization: Bearer <token> ヘッダーを優先し、無ければ httpOnly Cookie で受ける。
+    どちらも無効/欠如なら 401。type (access/refresh) は requested の値で検証する。
+    """
+    token = _bearer_token(request)
+    if token is None:
+        cookie = ACCESS_COOKIE if expected_type == "access" else REFRESH_COOKIE
+        token = request.cookies.get(cookie)
     if not token:
         raise HTTPException(status_code=401, detail="missing token")
     claims = decode_token(token)

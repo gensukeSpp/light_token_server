@@ -20,11 +20,12 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   `app/config.py` (env settings), `app/database_base.py` (`engine`/`SessionLocal`/`Base`/`get_db`).
 - **Templates** are plain HTML (Bootstrap removed): `base.html`, `login.html`, `index.html`.
   `logout.html` is a dead leftover from the old Flask app.
-- **Access tokens:** JWT HS256 (`PyJWT`) in `app/tokens.py`, issued as **httpOnly cookies**
-  (`access_token` + `refresh_token`). Payload = `{user_id, group_id, admin, type, exp}`,
-  where `admin` comes from `StaffLogin.ADMIN`. Long expiry for a limited org (defaults
-  access 24h / refresh 30 days, env-tunable via `ACCESS_TOKEN_EXPIRE_HOURS` /
-  `REFRESH_TOKEN_EXPIRE_DAYS`). Protected endpoints use `Depends(require_token)`.
+- **Access tokens:** JWT HS256 (`PyJWT`) in `app/tokens.py`. Issued as **httpOnly cookies**
+  (`access_token` + `refresh_token`) AND via `Authorization: Bearer <token>` header. Payload =
+  `{user_id, group_id, admin, type, exp}`, where `admin` comes from `StaffLogin.ADMIN`. Long
+  expiry for a limited org (defaults access 24h / refresh 30 days, env-tunable via
+  `ACCESS_TOKEN_EXPIRE_HOURS` / `REFRESH_TOKEN_EXPIRE_DAYS`). Protected endpoints use
+  `Depends(require_token)`.
 - `app/models.py` keeps the legacy schema shape (UPPERCASE columns, tables `M_STAFFINFO`
   `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`).
 - **DB is still MySQL** until the user migrates it to PostgreSQL. Tests do NOT need a real DB.
@@ -55,10 +56,17 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 - Passwords: `werkzeug` `generate_password_hash` / `check_password_hash`
   (`StaffLogin.check_password`). Keep werkzeug so existing hashes verify.
 - Auth (login): httpOnly session cookie via `SessionMiddleware` (`SECRET_KEY` from env).
-- Auth (access token): JWT HS256 (`PyJWT`) lives in `app/tokens.py`. Access + refresh are
-  set as httpOnly cookies (`access_token`/`refresh_token`). Protected endpoints use
-  `Depends(require_token)` (reads the `access_token` cookie); `/refresh` re-issues via
+- Auth (access token): JWT HS256 (`PyJWT`) lives in `app/tokens.py`. `get_token_claims`
+  reads the token from the **`Authorization: Bearer <token>` header first, then the
+  httpOnly cookie** (`access_token`/`refresh_token`) as fallback (the consuming
+  `time-table-to-line` app sends Bearer headers; cookie keeps backward compat). Protected
+  endpoints use `Depends(require_token)`; `/refresh` re-issues via
   `get_token_claims(request, "refresh")`. Payload keys: `user_id`, `group_id`, `admin`, `type`, `exp`.
+- **Token/link contract with the consuming app (`time-table-to-line`):** `/timetable/auth`
+  redirects to `{APP_URL}/auth?token=<access>` (303) with cookies also set; `/refresh`
+  returns the new access-token **string in the body** (JSONResponse) with the cookie re-set.
+  Keep these shapes — the frontend reads `?token=` from the URL and sends `Authorization:
+  Bearer` on every request.
 - DB access in FastAPI code **must** go through the `get_db` dependency
   (`db: Session = Depends(get_db)`), never a bare `SessionLocal()` — that's what lets tests
   override with SQLite.

@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from ..config import APP_URL
@@ -31,7 +31,15 @@ def get_user_group_id(db: Session, staff_id: int) -> tuple[int, int]:
 def convert_str_to_date(str_date: str) -> datetime:
     regex_data = re.sub(r"\.\d{3}Z", "", str_date)
     replaced = regex_data.replace("T", " ")
-    return datetime.strptime(replaced, "%Y-%m-%d %H:%M:%S")
+    try:
+        return datetime.strptime(replaced, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        # 形式が異なる入力（datetime-local 等）で 500 になるのを防ぐ。
+        # 期待形式: 'YYYY-MM-DDTHH:MM:SS[.fff]Z'
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid datetime format: {str_date!r}; expected 'YYYY-MM-DDTHH:MM:SS[.fff]Z'",
+        )
 
 
 @router.get("/timetable/auth")
@@ -44,7 +52,9 @@ def post_access_token(
     staff_id, group_id = get_user_group_id(db, user.STAFFID)
     access = create_access_token(staff_id, group_id, bool(user.ADMIN))
     refresh = create_refresh_token(staff_id, group_id, bool(user.ADMIN))
-    response = RedirectResponse(f"{APP_URL}/auth", status_code=303)
+    # 旧 Flask の契約: アクセストークンを URL クエリ ?token= で渡し、/auth で受ける。
+    # httpOnly Cookie も併せてセットする（両対応）。
+    response = RedirectResponse(f"{APP_URL}/auth?token={access}", status_code=303)
     set_auth_cookies(response, access, refresh)
     return response
 
@@ -53,83 +63,58 @@ def post_access_token(
 @router.post("/refresh")
 def refresh_token(request: Request, db: Session = Depends(get_db)):
     claims = get_token_claims(request, "refresh")
-    user = (
-        db.query(StaffLogin).filter(StaffLogin.STAFFID == claims["user_id"]).first()
-    )
+    user = db.query(StaffLogin).filter(StaffLogin.STAFFID == claims.get("user_id")).first()
     if user is None:
         raise HTTPException(status_code=401, detail="user not found")
-    access = create_access_token(
-        claims["user_id"], claims["group_id"], bool(user.ADMIN)
-    )
-    response = RedirectResponse(f"{APP_URL}/auth", status_code=303)
+    access = create_access_token(claims.get("user_id"), claims.get("group_id"), bool(user.ADMIN))
+    # 旧 Flask の契約: 新しいアクセストークンの文字列を body で返す。
+    # Cookie にも再セットする（両対応）。
+    response = JSONResponse(access)
     set_auth_cookies(response, access, None)
     return response
 
 
 @router.get("/timetable/inquiry")
 @router.post("/timetable/inquiry")
-def print_user_inquiry(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
+def print_user_inquiry(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
     team = db.get(Team, claims["group_id"])
     return {
-        "staff_id": str(claims["user_id"]),
-        "group_id": claims["group_id"],
+        "staff_id": str(claims.get("user_id")),
+        "group_id": claims.get("group_id"),
         "group_name": team.SHORTNAME if team else None,
-        "admin": claims["admin"],
+        "admin": claims.get("admin"),
     }
 
 
 @router.get("/group/all")
-def get_team_events(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
-    events = (
-        db.query(EventORM).filter(EventORM.group_id == claims["group_id"]).all()
-    )
+def get_team_events(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
+    events = db.query(EventORM).filter(EventORM.group_id == claims.get("group_id")).all()
     return [event.to_dict() for event in events]
 
 
 @router.get("/group/users")
 @router.post("/group/users")
-def get_team_member(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
-    members = (
-        db.query(User).filter(User.TEAM_CODE == claims["group_id"]).all()
-    )
-    return [
-        {"staff_id": m.STAFFID, "family_kana": m.FKANA, "last_kana": m.LKANA}
-        for m in members
-    ]
+def get_team_member(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
+    members = db.query(User).filter(User.TEAM_CODE == claims.get("group_id")).all()
+    return [{"staff_id": m.STAFFID, "family_kana": m.FKANA, "last_kana": m.LKANA} for m in members]
 
 
 @router.get("/event/all")
-def get_all_event(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
+def get_all_event(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
     events = db.query(EventORM).all()
     return [event.to_dict() for event in events]
 
 
 @router.get("/event/user")
 @router.post("/event/user")
-def get_user_event(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
-    events = (
-        db.query(EventORM)
-        .filter(EventORM.staff_id == claims["user_id"])
-        .all()
-    )
+def get_user_event(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
+    events = db.query(EventORM).filter(EventORM.staff_id == claims.get("user_id")).all()
     return [event.to_dict() for event in events]
 
 
 @router.get("/group-names")
 @router.post("/group-names")
-def get_team_name(
-    claims: dict = Depends(require_token), db: Session = Depends(get_db)
-):
+def get_team_name(claims: dict = Depends(require_token), db: Session = Depends(get_db)):
     teams = db.query(Team).all()
     return [t.SHORTNAME for t in teams]
 
