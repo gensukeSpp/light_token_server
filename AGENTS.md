@@ -11,16 +11,20 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 
 ## Current state (partially migrated)
 - **Done:** dependency manifest (`pyproject.toml`, `uv.lock`, `.python-version` pin 3.13),
-  and the **login flow is now FastAPI**.
-- **FastAPI modules:** `app/main.py` (FastAPI app + `SessionMiddleware` + `include_router`),
-  `app/routers/login.py` (`/login` GET/POST, `/logout`, `/` link page),
+  the **login flow**, and the **access-token / CRUD endpoints are all FastAPI** (Flask fully removed).
+- **FastAPI modules:** `app/main.py` (FastAPI app + `SessionMiddleware` + `CORSMiddleware` +
+  `include_router`), `app/routers/login.py` (`/login` GET/POST, `/logout`, `/` link page),
+  `app/routers/timetable.py` (token issuance `/timetable/auth`, `/refresh`, and CRUD),
+  `app/tokens.py` (JWT access/refresh + httpOnly cookie helpers + `require_token`),
   `app/schemas.py` (Pydantic), `app/security.py` (`login_required` via `get_db`),
   `app/config.py` (env settings), `app/database_base.py` (`engine`/`SessionLocal`/`Base`/`get_db`).
 - **Templates** are plain HTML (Bootstrap removed): `base.html`, `login.html`, `index.html`.
   `logout.html` is a dead leftover from the old Flask app.
-- **Still Flask (next stage, do NOT touch yet):** `app/routes.py` (CRUD / access-token
-  issuance) and `app/auth_middleware.py` (JWT `token_required` / `issue_token`). `main.py`
-  must NOT import these until they're migrated.
+- **Access tokens:** JWT HS256 (`PyJWT`) in `app/tokens.py`, issued as **httpOnly cookies**
+  (`access_token` + `refresh_token`). Payload = `{user_id, group_id, admin, type, exp}`,
+  where `admin` comes from `StaffLogin.ADMIN`. Long expiry for a limited org (defaults
+  access 24h / refresh 30 days, env-tunable via `ACCESS_TOKEN_EXPIRE_HOURS` /
+  `REFRESH_TOKEN_EXPIRE_DAYS`). Protected endpoints use `Depends(require_token)`.
 - `app/models.py` keeps the legacy schema shape (UPPERCASE columns, tables `M_STAFFINFO`
   `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`).
 - **DB is still MySQL** until the user migrates it to PostgreSQL. Tests do NOT need a real DB.
@@ -40,7 +44,8 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 - DB: **PostgreSQL** (from MySQL); Render + Neon planned. Templates: **htmx** (no Bootstrap).
 
 ## Build & test
-- Tests: `uv run pytest` (tests live under `tests/`; `tests/test_health.py` + `tests/test_login.py`).
+- Tests: `uv run pytest` (tests live under `tests/`; `test_health.py`, `test_login.py`,
+  `test_tokens.py`, `test_timetable.py`).
   pytest config lives in `pyproject.toml` (`testpaths`, `pythonpath = ["."]`).
 - Run the server: `uvicorn app.main:app` → `/health` returns `{"status":"ok"}`.
 
@@ -49,8 +54,11 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   `EventORM.to_dict()` emits ISO `"%Y-%m-%dT%H:%M:%S.000Z"` — preserve it.
 - Passwords: `werkzeug` `generate_password_hash` / `check_password_hash`
   (`StaffLogin.check_password`). Keep werkzeug so existing hashes verify.
-- Auth: httpOnly session cookie via `SessionMiddleware` (`SECRET_KEY` from env).
-  JWT HS256 (`PyJWT`) is used by the not-yet-migrated `auth_middleware.py`.
+- Auth (login): httpOnly session cookie via `SessionMiddleware` (`SECRET_KEY` from env).
+- Auth (access token): JWT HS256 (`PyJWT`) lives in `app/tokens.py`. Access + refresh are
+  set as httpOnly cookies (`access_token`/`refresh_token`). Protected endpoints use
+  `Depends(require_token)` (reads the `access_token` cookie); `/refresh` re-issues via
+  `get_token_claims(request, "refresh")`. Payload keys: `user_id`, `group_id`, `admin`, `type`, `exp`.
 - DB access in FastAPI code **must** go through the `get_db` dependency
   (`db: Session = Depends(get_db)`), never a bare `SessionLocal()` — that's what lets tests
   override with SQLite.
@@ -66,8 +74,8 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 - **Do NOT run DB migrations** — the PostgreSQL migration (step 5 of requirement-02)
   is done by the user personally ("ここは私が行う"). Prepare Alembic, leave the run to them.
 - `.venv/` and `.env` are gitignored — do not read or commit `.env` (DB creds + secrets).
-- `routes.py` / `auth_middleware.py` still import Flask and are next-stage: leave them,
-  and make sure `main.py` does not import them until migrated.
+- `routes.py` / `auth_middleware.py` were **removed** (Issue #2) — do not re-add Flask code
+  or Flask imports under `app/`; keep `main.py` on the FastAPI routers only.
 - Don't `raise RedirectResponse(...)` (Starlette 1.4.1 rejects it); use `HTTPException` 303.
 - Tests use SQLite in-memory with `poolclass=StaticPool` + `connect_args={"check_same_thread":
   False}` (TestClient runs the app in a worker thread; without StaticPool the tables vanish).
