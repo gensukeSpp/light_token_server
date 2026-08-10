@@ -40,3 +40,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if ENV == "production" and not SECRET_KEY:
     raise RuntimeError("SECRET_KEY must be set in production")
 APP_URL = os.getenv("CLOUD_TIMETABLE4", "http://localhost:5173")
+
+# アクセストークン/リフレッシュトークンの有効期限(限定組織向けに長め。env で調整可)
+ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "24"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
