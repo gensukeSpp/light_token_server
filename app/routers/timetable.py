@@ -54,6 +54,7 @@ def post_access_token(
     refresh = create_refresh_token(staff_id, group_id, bool(user.ADMIN))
     # 旧 Flask の契約: アクセストークンを URL クエリ ?token= で渡し、/auth で受ける。
     # httpOnly Cookie も併せてセットする（両対応）。
+    print(APP_URL)
     response = RedirectResponse(f"{APP_URL}/auth?token={access}", status_code=303)
     set_auth_cookies(response, access, refresh)
     return response
@@ -62,14 +63,16 @@ def post_access_token(
 @router.get("/refresh")
 @router.post("/refresh")
 def refresh_token(request: Request, db: Session = Depends(get_db)):
-    claims = get_token_claims(request, "refresh")
+    # 旧 Flask 契約: 呼び出し側 (time-table-to-line) はアクセストークンを Bearer で送って
+    # /refresh を叩く。access / refresh どちらの type も受理する (type 検証を緩和)。
+    claims = get_token_claims(request, {"access", "refresh"})
     user = db.query(StaffLogin).filter(StaffLogin.STAFFID == claims.get("user_id")).first()
     if user is None:
         raise HTTPException(status_code=401, detail="user not found")
     access = create_access_token(claims.get("user_id"), claims.get("group_id"), bool(user.ADMIN))
     # 旧 Flask の契約: 新しいアクセストークンの文字列を body で返す。
     # Cookie にも再セットする（両対応）。
-    response = JSONResponse(access)
+    response = JSONResponse({"access_token": access})
     set_auth_cookies(response, access, None)
     return response
 

@@ -143,8 +143,23 @@ def test_refresh_with_bearer_returns_access_token_body(client):
     r = client.post("/refresh", headers=_bearer(refresh), follow_redirects=False)
     assert r.status_code == 200
     body = r.json()
-    assert isinstance(body, str)
-    claims = jwt.decode(body, tokens.SECRET_KEY, algorithms=[tokens.ALGORITHM])
+    assert isinstance(body, dict)
+    assert "access_token" in body
+    claims = jwt.decode(body["access_token"], tokens.SECRET_KEY, algorithms=[tokens.ALGORITHM])
+    assert claims["type"] == "access"
+    assert claims["user_id"] == 1001
+
+
+def test_refresh_with_access_bearer_is_allowed(client):
+    # 旧 Flask 契約: 呼び出し側 (time-table-to-line) はアクセストークンを Bearer で /refresh に
+    # 送る。access type でも受理し、新しいアクセストークン文字列を body で返すこと。
+    access = tokens.create_access_token(1001, 3, True)
+    r = client.post("/refresh", headers=_bearer(access), follow_redirects=False)
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, dict)
+    assert "access_token" in body
+    claims = jwt.decode(body["access_token"], tokens.SECRET_KEY, algorithms=[tokens.ALGORITHM])
     assert claims["type"] == "access"
     assert claims["user_id"] == 1001
 

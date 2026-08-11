@@ -11,7 +11,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
-    https_only=(ENV == "production"),
+    https_only=(ENV == "development"),
 )
 app.add_middleware(
     CORSMiddleware,

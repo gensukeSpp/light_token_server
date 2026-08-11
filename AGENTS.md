@@ -61,7 +61,9 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   httpOnly cookie** (`access_token`/`refresh_token`) as fallback (the consuming
   `time-table-to-line` app sends Bearer headers; cookie keeps backward compat). Protected
   endpoints use `Depends(require_token)`; `/refresh` re-issues via
-  `get_token_claims(request, "refresh")`. Payload keys: `user_id`, `group_id`, `admin`, `type`, `exp`.
+  `get_token_claims(request, {"access", "refresh"})` — accepts both token types so the
+  old consuming app (which sends its **access** token to `/refresh`) keeps working.
+  Payload keys: `user_id`, `group_id`, `admin`, `type`, `exp`.
 - **Token/link contract with the consuming app (`time-table-to-line`):** `/timetable/auth`
   redirects to `{APP_URL}/auth?token=<access>` (303) with cookies also set; `/refresh`
   returns the new access-token **string in the body** (JSONResponse) with the cookie re-set.
