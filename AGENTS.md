@@ -73,8 +73,9 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   (`db: Session = Depends(get_db)`), never a bare `SessionLocal()` — that's what lets tests
   override with SQLite.
 - Forms: Pydantic schema + `Annotated[LoginForm, Form()]` (needs `python-multipart`).
-- CORS origins: `os.getenv("CLOUD_TIMETABLE4")` + `http://localhost:5173`. DB URL built from
-  env `DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME` (or `DATABASE_URL`).
+- CORS: `allow_credentials=True` (httpOnly Cookie 認証に必須) で `allow_origins` は
+  `os.getenv("CLOUD_TIMETABLE4")` + `http://localhost:5173`。
+- DB URL built from env `DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME` (or `DATABASE_URL`).
 - UI copy is Japanese; templates in `app/templates/`.
 - Starlette 1.4.1: `TemplateResponse(request, name, {…})` is request-first, and you must
   `raise HTTPException(303, headers={"Location": …})` rather than `raise RedirectResponse`.

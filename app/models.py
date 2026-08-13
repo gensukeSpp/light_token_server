@@ -97,9 +97,9 @@ class EventORM(Base):
     group_id = Column(Integer, ForeignKey("M_TEAM.CODE"), nullable=False)
     start_time = Column(Date(), nullable=False)
     end_time = Column(Date(), nullable=False)
-    title = Column(String(25), index=True, nullable=False)
+    title = Column(String(50), index=True, nullable=False)
     summary = Column(String(50), nullable=True)
-    progress = Column(String(25), index=True, nullable=True)
+    progress = Column(String(255), index=True, nullable=True)
 
     # SQLAlchemyでクラスオブジェクトを辞書型(dictionary)に変換する方法
     # https://qiita.com/hayashi-ay/items/4dc431003e7866d2aff8
