@@ -2,7 +2,7 @@
 
 ## Overview
 Backend for login and access-token handling for the `time-table-to-line` application. 
-Currently migrating from a legacy Flask/MySQL codebase to **FastAPI / PostgreSQL / Pydantic / htmx / uv / pytest**.
+Successfully migrated from legacy Flask/MySQL codebase to **FastAPI / PostgreSQL / Pydantic / htmx / uv / pytest**.
 
 ## Development Setup
 - **Language:** Python 3.13 (pinned in `.python-version`)
@@ -28,8 +28,7 @@ Currently migrating from a legacy Flask/MySQL codebase to **FastAPI / PostgreSQL
   - DB access must use `get_db` dependency.
   - Do NOT run database migrations; Alembic configuration is present, but execution is manually managed by the user.
 - **Templates:** Jinja2 (no Bootstrap, using htmx).
-- **Authentication:** httpOnly session cookies via `SessionMiddleware`.
-- **Legacy Components:** `app/routes.py` and `app/auth_middleware.py` are still Flask-based and NOT yet migrated. Do NOT import these in `app/main.py`.
+- **Authentication:** JWT-based hybrid approach supporting both `httpOnly` session cookies and `Authorization: Bearer` headers for compatibility with existing clients.
 - **Starlette 1.4.1:** Use `raise HTTPException(303, headers={"Location": ...})` for redirects instead of `RedirectResponse`.
 - **Models:** Legacy schema (UPPERCASE columns).
 
@@ -41,4 +40,4 @@ Currently migrating from a legacy Flask/MySQL codebase to **FastAPI / PostgreSQL
 - Tests use an in-memory SQLite database configured in `tests/conftest.py`.
 - pytest configuration is located in `pyproject.toml`.
 
-For detailed specifications and migration progress, refer to `requirement-02.md` and `AGENTS.md` in the project root.
+For detailed specifications and migration progress, refer to `requirement-02.md`, `AGENTS.md` and `docs/architecture/README.md` in the project root.
