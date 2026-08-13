@@ -30,7 +30,7 @@
 
 ### T4: 全体検証
 - [x] `uv run pytest` が全 green。（23 passed）
-- [ ] （任意）uvicorn 起動 + curl で `/timetable/auth` の Location と
+- [x] （任意）uvicorn 起動 + curl で `/timetable/auth` の Location と
       `/refresh` の body を確認。
 
 ## やらないこと
