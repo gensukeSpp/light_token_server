@@ -128,6 +128,7 @@ def append_event_item(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
+    print(f"Insert 前: {body.start_time}")
     event = EventORM(
         staff_id=body.staff_id,
         group_id=body.group,
