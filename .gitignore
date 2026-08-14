@@ -9,13 +9,13 @@ logs/
 uv.lock
 
 # For release
-# docker-compose.yml
-# .gemini/
-# .github/
-# .hermes/
-# .roo/
-# docs/
-# tasks/
-# AGENT.md
-# GEMINI.md
-# requirement-02.md
+docker-compose.yml
+.gemini/
+.github/
+.hermes/
+.roo/
+docs/
+tasks/
+AGENT.md
+GEMINI.md
+requirement-02.md
