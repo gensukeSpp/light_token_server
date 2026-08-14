@@ -59,7 +59,7 @@ class Team(Base):
     __tablename__ = "M_TEAM"
     CODE = Column(Integer, primary_key=True, index=True, nullable=False)
     NAME = Column(String(50), index=True, nullable=False)
-    SHORTNAME = Column(String(50), index=True, nullable=False)
+    SHORTNAME = Column(String(25), index=True, nullable=False)
     event = relationship("EventORM", backref="M_TEAM")
 
     def __init__(self, CODE):
@@ -95,8 +95,8 @@ class EventORM(Base):
     id = Column(Integer, primary_key=True, index=True)
     staff_id = Column(Integer, ForeignKey("M_LOGGININFO.STAFFID"), nullable=False)
     group_id = Column(Integer, ForeignKey("M_TEAM.CODE"), nullable=False)
-    start_time = Column(Date(), nullable=False)
-    end_time = Column(Date(), nullable=False)
+    start_time = Column(DateTime(), nullable=False)
+    end_time = Column(DateTime(), nullable=False)
     title = Column(String(50), index=True, nullable=False)
     summary = Column(String(50), nullable=True)
     progress = Column(String(255), index=True, nullable=True)
