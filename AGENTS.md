@@ -27,7 +27,8 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   `ACCESS_TOKEN_EXPIRE_HOURS` / `REFRESH_TOKEN_EXPIRE_DAYS`). Protected endpoints use
   `Depends(require_token)`.
 - `app/models.py` keeps the legacy schema shape (UPPERCASE columns, tables `M_STAFFINFO`
-  `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`).
+  `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`) plus `M_MILESTONE` and `M_MILESTONE_EVENT`
+  for milestone/task management (see Milestones section below).
 - **DB is still MySQL** until the user migrates it to PostgreSQL. Tests do NOT need a real DB.
 
 ## IMPORTANT: activate the venv before uv/pytest
@@ -80,6 +81,53 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 - Starlette 1.4.1: `TemplateResponse(request, name, {…})` is request-first, and you must
   `raise HTTPException(303, headers={"Location": …})` rather than `raise RedirectResponse`.
   See the `flask-to-fastapi-migration` skill for details.
+
+## Milestones (`requirement-03.md`)
+
+### Table schema
+- `M_MILESTONE` — テーブル名は既存規則 (`M_STAFFINFO`) に合わせる
+  - `id: Integer, primary_key`
+  - `staff_id: Integer, ForeignKey("M_LOGGININFO.STAFFID")` — 作成者ID
+  - `title: String(100)`
+  - `description: String(256), nullable`
+  - `color: String(10)` — カラーコード
+  - `status: Boolean, default=True` — `True`=open, `False`=closed
+  - `created_at: Date` — 作成日（時刻不要）
+  - `guidline_end_date: Date, nullable` — 達成目安日
+  - `accomplished_date: Date, nullable` — 達成日（入力=close）
+- `T_TIMELINE_EVENT` に追加
+  - `milestone_id: Integer, ForeignKey("M_MILESTONE.id"), nullable` — 所属マイルストーン
+  - `completed: Boolean, default=False` — 完了フラグ
+
+### Semantic rules
+- `status=True` → open, `status=False` → closed
+- 一度 closed したら再 open 不可（API レイヤで拒否）
+- マイルストーン close 時、属する全イベントの `completed` を `True` に自動更新
+- `completed=True` または `milestone_id` が削除されたイベントはデフォルト色 (`#2196f3`) に変更
+- マイルストーンはグループ横断共有。`group_id` カラムは不要
+
+### Permission model
+- `admin=True` のユーザー全員が作成/クローズ/削除可能
+- 従来の「そのグループの管理者」→ 誤解を招く表現。実態は「全 admin ユーザー」
+- 閲覧はグループ単位（既存のトークン `group_id` でフィルタ）
+
+### Color rules
+- 10 固定パターン: ` #9c27b0 #009688 #795548 #607d8b #e91e63 #3f51b5 #00bcd4 #ff5722 #8bc34a #ff9800`
+- 作成時、open マイルストーンと被らない色を自動選択
+- 10 件超えた場合は 1 番目の色から cyclic に戻す
+
+### API endpoints
+- `POST /milestone/add` — admin のみ、カラータブルから衝突回避
+- `GET /milestone/all` — open milestone 一覧
+- `POST /milestone/update/{id}` — accomplished_date 設定で close
+- `DELETE /milestone/remove/{id}` — admin のみ
+- `POST /event/add` — `milestone_id` optional 追加
+- `POST /event/update/{id}` — `completed` 対応
+
+### UI conventions
+- Japanese date format (UTC+9) for display only (stored as-is)
+- Event default color: `#2196f3`
+- Clicked color: `#ffc107`
 
 ## Pitfalls
 - **Do NOT run DB migrations** — the PostgreSQL migration (step 5 of requirement-02)
