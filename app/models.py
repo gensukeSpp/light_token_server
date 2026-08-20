@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import expression
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from .database_base import Base
@@ -99,10 +100,12 @@ class EventORM(Base):
     end_time = Column(DateTime(), nullable=False)
     title = Column(String(50), index=True, nullable=False)
     summary = Column(String(50), nullable=True)
-    progress = Column(String(255), index=True, nullable=True)
+    progress = Column(String(256), index=True, nullable=True)
+    milestone_id = Column(Integer, ForeignKey("M_MILESTONE.id"), nullable=True)
+    completed = Column(Boolean, server_default=expression.false(), nullable=False)
 
     # SQLAlchemyでクラスオブジェクトを辞書型(dictionary)に変換する方法
-    # https://qiita.com/hayashi-ay/items/4dc431003e7866d2aff8
+    # https://qiita.com/hayashi-ay/items/4da431003e8d2aff8
     def to_dict(self):
         f = "%Y-%m-%dT%H:%M:%S.000Z"
         return {
@@ -114,4 +117,42 @@ class EventORM(Base):
             "title": self.title,
             "summary": self.summary,
             "progress": self.progress,
+            "milestone_id": self.milestone_id,
+            "completed": self.completed,
+        }
+
+
+class MilestoneORM(Base):
+    """マイルストーン (requirement-03.md)。
+    グループ横断共有のため group_id カラムは持たない。
+    status: True=open, False=closed。一度 closed したら再 open 不可。
+    """
+
+    __tablename__ = "M_MILESTONE"
+
+    id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(
+        Integer,
+        ForeignKey("M_LOGGININFO.STAFFID"),
+        nullable=False,
+    )
+    title = Column(String(100), index=True, nullable=False)
+    description = Column(String(256), nullable=True)
+    color = Column(String(10), nullable=False)
+    status = Column(Boolean, server_default=expression.true(), nullable=False)
+    created_at = Column(Date, nullable=False)
+    guidline_end_date = Column(Date, nullable=True)
+    accomplished_date = Column(Date, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "staff_id": self.staff_id,
+            "title": self.title,
+            "description": self.description,
+            "color": self.color,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
+            "guidline_end_date": (self.guidline_end_date.isoformat() if self.guidline_end_date is not None else None),
+            "accomplished_date": (self.accomplished_date.isoformat() if self.accomplished_date is not None else None),
         }
