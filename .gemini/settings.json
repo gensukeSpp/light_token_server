@@ -33,10 +33,5 @@
         "linksee-memory"
       ]
     }
-  },
-  "tools": {
-    "allowed": [
-      "run_shell_command(gh *)"
-    ]
   }
 }

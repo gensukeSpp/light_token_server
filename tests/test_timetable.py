@@ -7,7 +7,7 @@ def _login(client):
     return client.post(
         "/login",
         data={"STAFFID": "1001", "PASSWORD": "secret"},
-        follow_redirects=False,
+        follow_redirects=True,
     )
 
 

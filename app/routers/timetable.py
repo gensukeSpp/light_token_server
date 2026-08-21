@@ -54,6 +54,8 @@ def post_access_token(
     refresh = create_refresh_token(staff_id, group_id, bool(user.ADMIN))
     # 旧 Flask の契約: アクセストークンを URL クエリ ?token= で渡し、/auth で受ける。
     # httpOnly Cookie も併せてセットする（両対応）。
+    if not APP_URL:
+        raise HTTPException(status_code=500, detail="APP_URL is not set")
     print(APP_URL)
     response = RedirectResponse(f"{APP_URL}/auth?token={access}", status_code=303)
     set_auth_cookies(response, access, refresh)
