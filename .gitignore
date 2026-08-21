@@ -7,6 +7,7 @@ __pycache__/
 alembic.ini
 logs/
 uv.lock
+.playwright-mcp/
 
 # For release
 # docker-compose.yml
