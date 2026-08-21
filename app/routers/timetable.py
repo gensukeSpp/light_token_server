@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..config import APP_URL
 from ..database_base import get_db
 from ..models import StaffLogin, Team, User, EventORM
-from ..schemas import EventCreate, EventUpdate
+from ..schemas import EventCreate, EventUpdate, EventDateUpdate
 from ..security import login_required
 from ..tokens import (
     create_access_token,
@@ -160,6 +160,32 @@ def update_event_item(
         target.progress = body.progress
     db.commit()
     return target.to_dict()
+
+
+@router.post("/date/update")
+def update_event_dates(
+    body: EventDateUpdate,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    # Timeline/Calendar のドラッグ&ドロップによる日時移動・リサイズの一括保存。
+    # フロント (useUpdateDateListMutation) が { data: [{id, start_time, end_time}] } を送る。
+    # 更新対象イベントは、作成者本人のみ権限を持つ（他メンバーのイベントは触らせない）。
+    updated: list[EventORM] = []
+    for item in body.data:
+        target = db.query(EventORM).filter(EventORM.id == item.id).first()
+        if target is None:
+            raise HTTPException(status_code=404, detail=f"event not found: {item.id}")
+        if target.staff_id != claims.get("user_id"):
+            raise HTTPException(
+                status_code=403,
+                detail=f"not allowed to update other member's event: {item.id}",
+            )
+        target.start_time = convert_str_to_date(item.start_time)
+        target.end_time = convert_str_to_date(item.end_time)
+        updated.append(target)
+    db.commit()
+    return [event.to_dict() for event in updated]
 
 
 @router.delete("/event/remove/{event_id}")

@@ -109,6 +109,48 @@ def test_event_remove(client):
     assert len(r2.json()) == 0
 
 
+def test_date_update_moves_event_times(client):
+    # cookie ログインのセッション確立は環境依存で不安定なため、Bearer トークンで直接検証する
+    # （test_bearer_header_only_allows_event_all と同じ方式）。
+    access = tokens.create_access_token(1001, 3, True)
+    r = client.post(
+        "/date/update",
+        headers=_bearer(access),
+        json={
+            "data": [
+                {
+                    "id": 1,
+                    "start_time": "2026-08-02T14:00:00.000Z",
+                    "end_time": "2026-08-02T15:00:00.000Z",
+                }
+            ]
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 200
+    updated = r.json()
+    assert isinstance(updated, list) and len(updated) == 1
+    assert updated[0]["id"] == 1
+    assert updated[0]["start"] == "2026-08-02T14:00:00.000Z"
+    assert updated[0]["end"] == "2026-08-02T15:00:00.000Z"
+
+
+def test_date_update_nonexistent_event_returns_404(client):
+    access = tokens.create_access_token(1001, 3, True)
+    r = client.post(
+        "/date/update",
+        headers=_bearer(access),
+        json={"data": [{"id": 9999, "start_time": "x", "end_time": "y"}]},
+        follow_redirects=False,
+    )
+    assert r.status_code == 404
+
+
+def test_date_update_requires_token(client):
+    r = client.post("/date/update", json={"data": []}, follow_redirects=False)
+    assert r.status_code == 401
+
+
 def _bearer(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
