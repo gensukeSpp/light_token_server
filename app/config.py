@@ -40,7 +40,7 @@ ENV = os.getenv("ENV", "development")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
 if ENV == "production" and not os.getenv("SECRET_KEY"):
     raise RuntimeError("SECRET_KEY must be set in production")
-APP_URL = os.getenv("CALENDAR_TIMELINE", "https://calendar-to-timeline.ktde-z3837.workers.dev")
+APP_URL = os.getenv("CALENDAR_TIMELINE", "https://time-table-to-line.ktde-z3837.workers.dev")
 # APP_URL = os.getenv("CALENDAR_TIMELINE", "http://localhost:5173")
 
 # アクセストークン/リフレッシュトークンの有効期限(限定組織向けに長め。env で調整可)
