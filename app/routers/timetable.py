@@ -83,7 +83,6 @@ def post_access_token(
     # httpOnly Cookie も併せてセットする（両対応）。
     # if not APP_URL:
     #     raise HTTPException(status_code=500, detail="APP_URL is not set")
-    print(APP_URL)
     response = RedirectResponse(f"{APP_URL}/auth?token={access}", status_code=303)
     set_auth_cookies(response, access, refresh)
     return response
@@ -157,7 +156,6 @@ def append_event_item(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
-    print(f"Insert 前: {body.start_time}")
     event = EventORM(
         staff_id=body.staff_id,
         group_id=body.group,
