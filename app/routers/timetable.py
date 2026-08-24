@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -7,8 +7,14 @@ from sqlalchemy.orm import Session
 
 from ..config import APP_URL
 from ..database_base import get_db
-from ..models import StaffLogin, Team, User, EventORM
-from ..schemas import EventCreate, EventUpdate, EventDateUpdate
+from ..models import StaffLogin, Team, User, EventORM, MilestoneORM
+from ..schemas import (
+    EventCreate,
+    EventUpdate,
+    EventDateUpdate,
+    MilestoneCreate,
+    MilestoneUpdate,
+)
 from ..security import login_required
 from ..tokens import (
     create_access_token,
@@ -19,6 +25,27 @@ from ..tokens import (
 )
 
 router = APIRouter()
+
+# マイルストーン用 10 固定カラーパレット (AGENTS.md / requirement-03.md)。
+# open(status=True) 中のマイルストーンと被らない色を _next_color が順に選ぶ。
+MILESTONE_COLORS = [
+    "#9c27b0", "#009688", "#795548", "#607d8b", "#e91e63",
+    "#3f51b5", "#00bcd4", "#ff5722", "#8bc34a", "#ff9800",
+]
+
+
+def _next_color(db: Session) -> str:
+    """open 中のマイルストーンが使っている色を避け、未使用色を先頭から返す。
+    10 件全部使われていれば先頭 (MILESTONE_COLORS[0]) に cyclic に戻す。
+    """
+    used = {
+        m.color
+        for m in db.query(MilestoneORM).filter(MilestoneORM.status.is_(True)).all()
+    }
+    for c in MILESTONE_COLORS:
+        if c not in used:
+            return c
+    return MILESTONE_COLORS[0]
 
 
 def get_user_group_id(db: Session, staff_id: int) -> tuple[int, int]:
@@ -54,9 +81,8 @@ def post_access_token(
     refresh = create_refresh_token(staff_id, group_id, bool(user.ADMIN))
     # 旧 Flask の契約: アクセストークンを URL クエリ ?token= で渡し、/auth で受ける。
     # httpOnly Cookie も併せてセットする（両対応）。
-    if not APP_URL:
-        raise HTTPException(status_code=500, detail="APP_URL is not set")
-    print(APP_URL)
+    # if not APP_URL:
+    #     raise HTTPException(status_code=500, detail="APP_URL is not set")
     response = RedirectResponse(f"{APP_URL}/auth?token={access}", status_code=303)
     set_auth_cookies(response, access, refresh)
     return response
@@ -130,7 +156,6 @@ def append_event_item(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
-    print(f"Insert 前: {body.start_time}")
     event = EventORM(
         staff_id=body.staff_id,
         group_id=body.group,
@@ -139,6 +164,8 @@ def append_event_item(
         title=body.title,
         summary=body.summary,
         progress=body.progress,
+        milestone_id=body.milestone_id,
+        completed=body.completed,
     )
     db.add(event)
     db.commit()
@@ -160,6 +187,10 @@ def update_event_item(
         target.summary = body.summary
     if body.progress is not None:
         target.progress = body.progress
+    if body.milestone_id is not None:
+        target.milestone_id = body.milestone_id
+    if body.completed is not None:
+        target.completed = body.completed
     db.commit()
     return target.to_dict()
 
@@ -202,3 +233,80 @@ def remove_event_item(
     db.delete(target)
     db.commit()
     return {"deleted": event_id}
+
+
+# --- Milestone (requirement-03.md) ---
+# admin=True の全ユーザーが作成 / close / 削除を実行できる。閲覧は require_token のみ。
+# グループ横断共有のため group_id フィルタはしない。
+
+@router.post("/milestone/add", status_code=201)
+def add_milestone(
+    body: MilestoneCreate,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    ms = MilestoneORM(
+        staff_id=claims["user_id"],
+        title=body.title,
+        description=body.description,
+        color=_next_color(db),
+        status=True,
+        created_at=date.today(),
+        guidline_end_date=body.guidline_end_date,
+    )
+    db.add(ms)
+    db.commit()
+    db.refresh(ms)
+    return ms.to_dict()
+
+
+@router.get("/milestone/all")
+def get_open_milestones(
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(MilestoneORM).filter(MilestoneORM.status.is_(True)).all()
+    return [m.to_dict() for m in rows]
+
+
+@router.post("/milestone/update/{milestone_id}")
+def close_milestone(
+    milestone_id: int,
+    body: MilestoneUpdate,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    target = db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id).first()
+    if target is None:
+        raise HTTPException(status_code=404, detail="milestone not found")
+    if target.status is False:
+        raise HTTPException(status_code=409, detail="already closed")
+    target.status = False
+    target.accomplished_date = body.accomplished_date
+    for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
+        ev.completed = True
+    db.commit()
+    db.refresh(target)
+    return target.to_dict()
+
+
+@router.delete("/milestone/remove/{milestone_id}")
+def remove_milestone(
+    milestone_id: int,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    target = db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id).first()
+    if target is None:
+        raise HTTPException(status_code=404, detail="milestone not found")
+    for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
+        ev.milestone_id = None
+    db.delete(target)
+    db.commit()
+    return {"deleted": milestone_id}
