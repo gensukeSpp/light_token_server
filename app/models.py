@@ -68,7 +68,7 @@ class Team(Base):
 
 
 class StaffLogin(Base):
-    __tablename__ = "M_LOGGININFO"
+    __tablename__ = "M_LOGININFO"
     id = Column(Integer, primary_key=True)
     STAFFID = Column(
         Integer,
@@ -79,7 +79,7 @@ class StaffLogin(Base):
     )
     PASSWORD_HASH = Column(String(128), index=True, nullable=True)
     ADMIN = Column(Boolean, index=True, nullable=True)
-    event = relationship("EventORM", backref="M_LOGGININFO")
+    event = relationship("EventORM", backref="M_LOGININFO")
 
     def __init__(self, STAFFID, PASSWORD, ADMIN):
         self.STAFFID = STAFFID
@@ -94,7 +94,7 @@ class EventORM(Base):
     __tablename__ = "T_TIMELINE_EVENT"
 
     id = Column(Integer, primary_key=True, index=True)
-    staff_id = Column(Integer, ForeignKey("M_LOGGININFO.STAFFID"), nullable=False)
+    staff_id = Column(Integer, ForeignKey("M_LOGININFO.STAFFID"), nullable=False)
     group_id = Column(Integer, ForeignKey("M_TEAM.CODE"), nullable=False)
     start_time = Column(DateTime(), nullable=False)
     end_time = Column(DateTime(), nullable=False)
@@ -122,10 +122,19 @@ class EventORM(Base):
         }
 
 
+# マイルストーン status (requirement-03.md 2026-08-27 変更)。
+# open=作成直後, waiting=再 open の猶予期間 (waiting for close), closed=達成済み。
+# デフォルトは open。
+MILESTONE_OPEN = "open"
+MILESTONE_WAITING = "waiting"
+MILESTONE_CLOSED = "closed"
+
+
 class MilestoneORM(Base):
     """マイルストーン (requirement-03.md)。
     グループ横断共有のため group_id カラムは持たない。
-    status: True=open, False=closed。一度 closed したら再 open 不可。
+    status: "open" / "waiting" / "closed" の String(10)。デフォルト open。
+    closed になった後も再 open の猶予期間 (waiting) を経て確定する予定。
     """
 
     __tablename__ = "M_MILESTONE"
@@ -133,13 +142,13 @@ class MilestoneORM(Base):
     id = Column(Integer, primary_key=True, index=True)
     staff_id = Column(
         Integer,
-        ForeignKey("M_LOGGININFO.STAFFID"),
+        ForeignKey("M_LOGININFO.STAFFID"),
         nullable=False,
     )
     title = Column(String(100), index=True, nullable=False)
     description = Column(String(256), nullable=True)
     color = Column(String(10), nullable=False)
-    status = Column(Boolean, server_default=expression.true(), nullable=False)
+    status = Column(String(10), server_default=MILESTONE_OPEN, nullable=False)
     created_at = Column(Date, nullable=False)
     guidline_end_date = Column(Date, nullable=True)
     accomplished_date = Column(Date, nullable=True)

@@ -39,7 +39,7 @@ def test_milestone_add_admin(client):
     assert r.status_code == 201
     body = r.json()
     assert body["color"] in MILESTONE_COLORS
-    assert body["status"] is True
+    assert body["status"] == "open"
     assert body["staff_id"] == 1001
 
 
@@ -63,7 +63,7 @@ def test_milestone_all_returns_open_only(client):
     rows = all_resp.json()
     assert len(rows) == 1
     assert rows[0]["title"] == "M1"
-    assert rows[0]["status"] is True
+    assert rows[0]["status"] == "open"
 
     # close すると一覧から消える
     client.post(
@@ -81,7 +81,7 @@ def test_milestone_add_non_admin_forbidden(client):
     assert r.status_code == 403
 
 
-# 5. close: status=False、子イベント completed=True
+# 5. close: status=closed、子イベント completed=True
 def test_milestone_close_sets_completed(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
@@ -95,7 +95,7 @@ def test_milestone_close_sets_completed(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] is False
+    assert body["status"] == "closed"
 
     events = client.get("/event/all", headers=_bearer(True)).json()
     child = next(e for e in events if e["milestone_id"] == ms_id)

@@ -54,7 +54,7 @@ class MilestoneCreate(BaseModel):
 
 class MilestoneUpdate(BaseModel):
     """POST /milestone/update/{id} 用。accomplished_date 入力で close する。
-    一度 closed になったマイルストーンは再 open 不可。
+    status は open → closed へ遷移する(String)。waiting は再 open の猶予期間用。
     """
 
     accomplished_date: date

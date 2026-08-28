@@ -7,7 +7,15 @@ from sqlalchemy.orm import Session
 
 from ..config import APP_URL
 from ..database_base import get_db
-from ..models import StaffLogin, Team, User, EventORM, MilestoneORM
+from ..models import (
+    StaffLogin,
+    Team,
+    User,
+    EventORM,
+    MilestoneORM,
+    MILESTONE_OPEN,
+    MILESTONE_CLOSED,
+)
 from ..schemas import (
     EventCreate,
     EventUpdate,
@@ -27,7 +35,7 @@ from ..tokens import (
 router = APIRouter()
 
 # マイルストーン用 10 固定カラーパレット (AGENTS.md / requirement-03.md)。
-# open(status=True) 中のマイルストーンと被らない色を _next_color が順に選ぶ。
+# open 中のマイルストーンと被らない色を _next_color が順に選ぶ。
 MILESTONE_COLORS = [
     "#9c27b0", "#009688", "#795548", "#607d8b", "#e91e63",
     "#3f51b5", "#00bcd4", "#ff5722", "#8bc34a", "#ff9800",
@@ -40,7 +48,7 @@ def _next_color(db: Session) -> str:
     """
     used = {
         m.color
-        for m in db.query(MilestoneORM).filter(MilestoneORM.status.is_(True)).all()
+        for m in db.query(MilestoneORM).filter(MilestoneORM.status == MILESTONE_OPEN).all()
     }
     for c in MILESTONE_COLORS:
         if c not in used:
@@ -252,7 +260,7 @@ def add_milestone(
         title=body.title,
         description=body.description,
         color=_next_color(db),
-        status=True,
+        status=MILESTONE_OPEN,
         created_at=date.today(),
         guidline_end_date=body.guidline_end_date,
     )
@@ -267,7 +275,7 @@ def get_open_milestones(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
-    rows = db.query(MilestoneORM).filter(MilestoneORM.status.is_(True)).all()
+    rows = db.query(MilestoneORM).filter(MilestoneORM.status == MILESTONE_OPEN).all()
     return [m.to_dict() for m in rows]
 
 
@@ -283,9 +291,9 @@ def close_milestone(
     target = db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id).first()
     if target is None:
         raise HTTPException(status_code=404, detail="milestone not found")
-    if target.status is False:
+    if target.status == MILESTONE_CLOSED:
         raise HTTPException(status_code=409, detail="already closed")
-    target.status = False
+    target.status = MILESTONE_CLOSED
     target.accomplished_date = body.accomplished_date
     for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
         ev.completed = True
