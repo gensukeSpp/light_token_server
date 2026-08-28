@@ -150,7 +150,7 @@ class MilestoneORM(Base):
     color = Column(String(10), nullable=False)
     status = Column(String(10), server_default=MILESTONE_OPEN, nullable=False)
     created_at = Column(Date, nullable=False)
-    guidline_end_date = Column(Date, nullable=True)
+    guideline_end_date = Column(Date, nullable=True)
     accomplished_date = Column(Date, nullable=True)
 
     def to_dict(self):
@@ -162,6 +162,6 @@ class MilestoneORM(Base):
             "color": self.color,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at is not None else None,
-            "guidline_end_date": (self.guidline_end_date.isoformat() if self.guidline_end_date is not None else None),
+            "guideline_end_date": (self.guideline_end_date.isoformat() if self.guideline_end_date is not None else None),
             "accomplished_date": (self.accomplished_date.isoformat() if self.accomplished_date is not None else None),
         }

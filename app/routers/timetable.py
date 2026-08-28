@@ -262,7 +262,7 @@ def add_milestone(
         color=_next_color(db),
         status=MILESTONE_OPEN,
         created_at=date.today(),
-        guidline_end_date=body.guidline_end_date,
+        guideline_end_date=body.guideline_end_date,
     )
     db.add(ms)
     db.commit()

@@ -49,7 +49,7 @@ class MilestoneCreate(BaseModel):
 
     title: str
     description: str | None = None
-    guidline_end_date: date | None = None
+    guideline_end_date: date | None = None
 
 
 class MilestoneUpdate(BaseModel):
