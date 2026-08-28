@@ -313,8 +313,8 @@ def remove_milestone(
     target = db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id).first()
     if target is None:
         raise HTTPException(status_code=404, detail="milestone not found")
+    target.status = MILESTONE_CLOSED
     for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
-        ev.milestone_id = None
-    db.delete(target)
+        ev.completed = True
     db.commit()
-    return {"deleted": milestone_id}
+    return {"closed": milestone_id}

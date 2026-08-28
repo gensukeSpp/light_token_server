@@ -130,8 +130,8 @@ def test_milestone_update_not_found(client):
     assert r.status_code == 404
 
 
-# 8. 削除(admin) → 200 {"deleted": id}、子イベント milestone_id が None
-def test_milestone_remove_detaches_child(client):
+# 8. 削除(admin) → 200 {"closed": id}、DB からは消えず status=closed、子イベント completed=True
+def test_milestone_remove_closes_instead_of_delete(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
     ev = _add_event(client, milestone_id=ms_id)
@@ -140,11 +140,16 @@ def test_milestone_remove_detaches_child(client):
 
     r = client.delete(f"/milestone/remove/{ms_id}", headers=_bearer(True))
     assert r.status_code == 200
-    assert r.json() == {"deleted": ms_id}
+    assert r.json() == {"closed": ms_id}
+
+    # マイルストーンは残る（open 一覧には出ない）
+    rows = client.get("/milestone/all", headers=_bearer(True)).json()
+    assert len(rows) == 0
 
     events = client.get("/event/all", headers=_bearer(True)).json()
     child = next(e for e in events if e["id"] == ev_id)
-    assert child["milestone_id"] is None
+    assert child["milestone_id"] == ms_id  # 子イベントは残る（削除で切り離さない）
+    assert child["completed"] is True
 
 
 # 9. /event/add に milestone_id → 201、to_dict に milestone_id が入る

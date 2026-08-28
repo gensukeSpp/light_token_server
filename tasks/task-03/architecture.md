@@ -163,10 +163,12 @@ def close_milestone(
 > **将来拡張のための注記(今回見送り・再 open 可予定):**
 > 現行は「一度 closed したら再 open 不可」のため、close 済みへは 409 を返す(利用者確認済み 2026-08)。ただし将来、`requirement-03.md` 操作の流れ 4 の「何日か後に表記が消える」と組み合わせて、**表記している間は再 open できる**拡張を予定している。実装時に status 遷移の分岐(`if target.status is False: 409`)を**エンドポイント内の小さな遷移関数(`_apply_milestone_close` 等)に集約**し、将来 re-open 分岐を足す際にこの関数だけ改修すれば済む構造にしておく。この拡張では「closed だが表示中」の表現(accomplished_date からの経過日、または別フラグ)を future の判断で決める(今回のスキーマは増やさない)。
 
-### DELETE /milestone/remove/{id} — 200
+### DELETE /milestone/remove/{id} — 200 (soft close, 物理削除しない)
 - 認証: `require_token` + admin(403)。
 - 存在しない id は 404。
-- 処理: 子イベントの `milestone_id` を None に(色をデフォルト #2196f3 に戻す裏付け)→ マイルストーン削除 → `{"deleted": id}` を返す。
+- 処理: **DB からは削除せず** `target.status = "closed"` に変更し、子イベント(`milestone_id` が一致する
+  `T_TIMELINE_EVENT`)の `completed = True` に更新する(close と同じ連動)→ `{"closed": id}` を返す。
+  旧仕様の「子イベント milestone_id を None にして物理削除」は廃止。
 
 ```python
 @router.delete("/milestone/remove/{milestone_id}")
@@ -180,11 +182,11 @@ def remove_milestone(
     target = db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id).first()
     if target is None:
         raise HTTPException(status_code=404, detail="milestone not found")
+    target.status = MILESTONE_CLOSED
     for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
-        ev.milestone_id = None
-    db.delete(target)
+        ev.completed = True
     db.commit()
-    return {"deleted": milestone_id}
+    return {"closed": milestone_id}
 ```
 
 ### 既存 /event/* への milestone_id / completed 反映
