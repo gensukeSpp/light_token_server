@@ -82,53 +82,13 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   `raise HTTPException(303, headers={"Location": …})` rather than `raise RedirectResponse`.
   See the `flask-to-fastapi-migration` skill for details.
 
-## Milestones (`requirement-03.md`)
+## Milestones (requirement-03.md)
 
-### Table schema
-- `M_MILESTONE` — テーブル名は既存規則 (`M_STAFFINFO`) に合わせる
-  - `id: Integer, primary_key`
-  - `staff_id: Integer, ForeignKey("M_LOGININFO.STAFFID")` — 作成者ID
-  - `title: String(100)`
-  - `description: String(256), nullable`
-  - `color: String(10)` — カラーコード
-  - `status: String(10), default="open"` — `open` / `waiting` / `closed`
-    (`waiting` は再 open の猶予期間 = waiting for close。定数 `MILESTONE_OPEN`/`MILESTONE_WAITING`/`MILESTONE_CLOSED` を models に定義)
-  - `created_at: Date` — 作成日（時刻不要）
-  - `guidline_end_date: Date, nullable` — 達成目安日
-  - `accomplished_date: Date, nullable` — 達成日（入力=close）
-- `T_TIMELINE_EVENT` に追加
-  - `milestone_id: Integer, ForeignKey("M_MILESTONE.id"), nullable` — 所属マイルストーン
-  - `completed: Boolean, default=False` — 完了フラグ
+マイルストーン機能の要件(テーブル定義・状態遷移・権限・色・API・UI 規約)は、
+更新が頻繁なため **`.hermes/rules/milestones.md`** に分割してあります。
 
-### Semantic rules
-- `status="open"` → 作成直後。`status="closed"` → 達成済み。`status="waiting"` → 再 open の猶予期間（waiting for close）
-- 一度 closed したら再 open 不可（API レイヤで拒否）
-- マイルストーン close 時（`status`→`"closed"`）、属する全イベントの `completed` を `True` に自動更新
-- `completed=True` または `milestone_id` が削除されたイベントはデフォルト色 (`#2196f3`) に変更
-- マイルストーンはグループ横断共有。`group_id` カラムは不要
-
-### Permission model
-- `admin=True` のユーザー全員が作成/クローズ/削除可能
-- 従来の「そのグループの管理者」→ 誤解を招く表現。実態は「全 admin ユーザー」
-- 閲覧はグループ単位（既存のトークン `group_id` でフィルタ）
-
-### Color rules
-- 10 固定パターン: ` #9c27b0 #009688 #795548 #607d8b #e91e63 #3f51b5 #00bcd4 #ff5722 #8bc34a #ff9800`
-- 作成時、open マイルストーンと被らない色を自動選択
-- 10 件超えた場合は 1 番目の色から cyclic に戻す
-
-### API endpoints
-- `POST /milestone/add` — admin のみ、カラータブルから衝突回避
-- `GET /milestone/all` — open マイルストーン一覧（`status="open"` のみ返す）
-- `POST /milestone/update/{id}` — accomplished_date 設定で close
-- `DELETE /milestone/remove/{id}` — admin のみ
-- `POST /event/add` — `milestone_id` optional 追加
-- `POST /event/update/{id}` — `completed` 対応
-
-### UI conventions
-- Japanese date format (UTC+9) for display only (stored as-is)
-- Event default color: `#2196f3`
-- Clicked color: `#ffc107`
+→ **必須ルール: マイルストーン関連の変更・実装を行う前は必ず
+`[.hermes/rules/milestones.md](.hermes/rules/milestones.md)` を読み、従うこと。**
 
 ## Pitfalls
 - **Do NOT run DB migrations** — the PostgreSQL migration (step 5 of requirement-02)

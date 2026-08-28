@@ -42,7 +42,7 @@ Calendar (タブ左)は、ユーザー個人での操作。 Timeline (タブ右)
 	- color: String(10)
 	- status: ~~Boolean, default=True~~ String(10), default=open // 2026-08-27 更新
 	- created_at: Date()
-	- guidline_end_date: Date(), nullable=True
+	- guideline_end_date: Date(), nullable=True
 	- accomplished_date: Date(), nullable=True
 - "T_TIMELINE_EVENT" に追加するカラム
 	- milestone_id: Integer, ForeignKey("MILESTONE.id"), nullable=True
