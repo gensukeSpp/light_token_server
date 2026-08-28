@@ -39,7 +39,7 @@ def test_milestone_add_admin(client):
     assert r.status_code == 201
     body = r.json()
     assert body["color"] in MILESTONE_COLORS
-    assert body["status"] is True
+    assert body["status"] == "open"
     assert body["staff_id"] == 1001
 
 
@@ -63,7 +63,7 @@ def test_milestone_all_returns_open_only(client):
     rows = all_resp.json()
     assert len(rows) == 1
     assert rows[0]["title"] == "M1"
-    assert rows[0]["status"] is True
+    assert rows[0]["status"] == "open"
 
     # close すると一覧から消える
     client.post(
@@ -81,7 +81,7 @@ def test_milestone_add_non_admin_forbidden(client):
     assert r.status_code == 403
 
 
-# 5. close: status=False、子イベント completed=True
+# 5. close: status=closed、子イベント completed=True
 def test_milestone_close_sets_completed(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
@@ -95,7 +95,7 @@ def test_milestone_close_sets_completed(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] is False
+    assert body["status"] == "closed"
 
     events = client.get("/event/all", headers=_bearer(True)).json()
     child = next(e for e in events if e["milestone_id"] == ms_id)
@@ -130,8 +130,8 @@ def test_milestone_update_not_found(client):
     assert r.status_code == 404
 
 
-# 8. 削除(admin) → 200 {"deleted": id}、子イベント milestone_id が None
-def test_milestone_remove_detaches_child(client):
+# 8. 削除(admin) → 200 {"closed": id}、DB からは消えず status=closed、子イベント completed=True
+def test_milestone_remove_closes_instead_of_delete(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
     ev = _add_event(client, milestone_id=ms_id)
@@ -140,11 +140,16 @@ def test_milestone_remove_detaches_child(client):
 
     r = client.delete(f"/milestone/remove/{ms_id}", headers=_bearer(True))
     assert r.status_code == 200
-    assert r.json() == {"deleted": ms_id}
+    assert r.json() == {"closed": ms_id}
+
+    # マイルストーンは残る（open 一覧には出ない）
+    rows = client.get("/milestone/all", headers=_bearer(True)).json()
+    assert len(rows) == 0
 
     events = client.get("/event/all", headers=_bearer(True)).json()
     child = next(e for e in events if e["id"] == ev_id)
-    assert child["milestone_id"] is None
+    assert child["milestone_id"] == ms_id  # 子イベントは残る（削除で切り離さない）
+    assert child["completed"] is True
 
 
 # 9. /event/add に milestone_id → 201、to_dict に milestone_id が入る

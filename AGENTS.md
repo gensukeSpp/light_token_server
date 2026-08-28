@@ -27,7 +27,7 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   `ACCESS_TOKEN_EXPIRE_HOURS` / `REFRESH_TOKEN_EXPIRE_DAYS`). Protected endpoints use
   `Depends(require_token)`.
 - `app/models.py` keeps the legacy schema shape (UPPERCASE columns, tables `M_STAFFINFO`
-  `M_TEAM` `M_LOGGININFO` `T_TIMELINE_EVENT`) plus `M_MILESTONE` and `M_MILESTONE_EVENT`
+  `M_TEAM` `M_LOGININFO` `T_TIMELINE_EVENT`) plus `M_MILESTONE` and `M_MILESTONE_EVENT`
   for milestone/task management (see Milestones section below).
 - **DB is still MySQL** until the user migrates it to PostgreSQL. Tests do NOT need a real DB.
 
@@ -87,11 +87,12 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 ### Table schema
 - `M_MILESTONE` — テーブル名は既存規則 (`M_STAFFINFO`) に合わせる
   - `id: Integer, primary_key`
-  - `staff_id: Integer, ForeignKey("M_LOGGININFO.STAFFID")` — 作成者ID
+  - `staff_id: Integer, ForeignKey("M_LOGININFO.STAFFID")` — 作成者ID
   - `title: String(100)`
   - `description: String(256), nullable`
   - `color: String(10)` — カラーコード
-  - `status: Boolean, default=True` — `True`=open, `False`=closed
+  - `status: String(10), default="open"` — `open` / `waiting` / `closed`
+    (`waiting` は再 open の猶予期間 = waiting for close。定数 `MILESTONE_OPEN`/`MILESTONE_WAITING`/`MILESTONE_CLOSED` を models に定義)
   - `created_at: Date` — 作成日（時刻不要）
   - `guidline_end_date: Date, nullable` — 達成目安日
   - `accomplished_date: Date, nullable` — 達成日（入力=close）
@@ -100,9 +101,9 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
   - `completed: Boolean, default=False` — 完了フラグ
 
 ### Semantic rules
-- `status=True` → open, `status=False` → closed
+- `status="open"` → 作成直後。`status="closed"` → 達成済み。`status="waiting"` → 再 open の猶予期間（waiting for close）
 - 一度 closed したら再 open 不可（API レイヤで拒否）
-- マイルストーン close 時、属する全イベントの `completed` を `True` に自動更新
+- マイルストーン close 時（`status`→`"closed"`）、属する全イベントの `completed` を `True` に自動更新
 - `completed=True` または `milestone_id` が削除されたイベントはデフォルト色 (`#2196f3`) に変更
 - マイルストーンはグループ横断共有。`group_id` カラムは不要
 
@@ -118,7 +119,7 @@ is allowed — the stated "目的" (goal) is what matters, not a checklist.
 
 ### API endpoints
 - `POST /milestone/add` — admin のみ、カラータブルから衝突回避
-- `GET /milestone/all` — open milestone 一覧
+- `GET /milestone/all` — open マイルストーン一覧（`status="open"` のみ返す）
 - `POST /milestone/update/{id}` — accomplished_date 設定で close
 - `DELETE /milestone/remove/{id}` — admin のみ
 - `POST /event/add` — `milestone_id` optional 追加
