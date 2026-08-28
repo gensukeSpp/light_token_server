@@ -53,8 +53,13 @@ class MilestoneCreate(BaseModel):
 
 
 class MilestoneUpdate(BaseModel):
-    """POST /milestone/update/{id} 用。accomplished_date 入力で close する。
-    status は open → closed へ遷移する(String)。waiting は再 open の猶予期間用。
+    """POST /milestone/update/{id} 用。部分更新: None 以外のフィールドのみ反映。
+    accomplished_date に値を入れると status -> waiting(猶予期間)、
+    waiting のまま accomplished_date=None を明示すると re-open(status -> open)。
+    単なる編集(title / description / guideline_end_date)は status を変えない。
     """
 
-    accomplished_date: date
+    title: str | None = None
+    description: str | None = None
+    guideline_end_date: date | None = None
+    accomplished_date: date | None = None

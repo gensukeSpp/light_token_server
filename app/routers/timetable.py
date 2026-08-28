@@ -14,6 +14,7 @@ from ..models import (
     EventORM,
     MilestoneORM,
     MILESTONE_OPEN,
+    MILESTONE_WAITING,
     MILESTONE_CLOSED,
 )
 from ..schemas import (
@@ -275,7 +276,12 @@ def get_open_milestones(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
-    rows = db.query(MilestoneORM).filter(MilestoneORM.status == MILESTONE_OPEN).all()
+    # Issue #9: open + waiting を返す (closed を除く)。waiting の猶予期間中一覧表示に対応。
+    rows = (
+        db.query(MilestoneORM)
+        .filter(MilestoneORM.status != MILESTONE_CLOSED)
+        .all()
+    )
     return [m.to_dict() for m in rows]
 
 
@@ -293,10 +299,31 @@ def close_milestone(
         raise HTTPException(status_code=404, detail="milestone not found")
     if target.status == MILESTONE_CLOSED:
         raise HTTPException(status_code=409, detail="already closed")
-    target.status = MILESTONE_CLOSED
-    target.accomplished_date = body.accomplished_date
-    for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
-        ev.completed = True
+
+    # 部分更新: None 以外の編集フィールドのみ反映 (status は不変)
+    if body.title is not None:
+        target.title = body.title
+    if body.description is not None:
+        target.description = body.description
+    if body.guideline_end_date is not None:
+        target.guideline_end_date = body.guideline_end_date
+
+    # accomplished_date の扱い: model_fields_set で「送られたか(None でも)」を判別。
+    #  - 値あり -> waiting (猶予期間) へ遷移 + 子イベント completed=True (close 相当)
+    #  - 明示的 None -> waiting から re-open (open) へ。イベント completed は変更しない。
+    if "accomplished_date" in body.model_fields_set:
+        if body.accomplished_date is not None:
+            target.accomplished_date = body.accomplished_date
+            target.status = MILESTONE_WAITING
+            for ev in db.query(EventORM).filter(
+                EventORM.milestone_id == milestone_id
+            ).all():
+                ev.completed = True
+        else:
+            # re-open: waiting の再 open
+            target.status = MILESTONE_OPEN
+            target.accomplished_date = None
+
     db.commit()
     db.refresh(target)
     return target.to_dict()
