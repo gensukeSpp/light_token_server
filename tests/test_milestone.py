@@ -65,14 +65,33 @@ def test_milestone_all_returns_open_only(client):
     assert rows[0]["title"] == "M1"
     assert rows[0]["status"] == "open"
 
-    # close すると一覧から消える
+    # accomplished_date 設定(waiting)後も一覧に出続ける (Issue #9: open + waiting)
     client.post(
         f"/milestone/update/{ms_id}",
         json={"accomplished_date": "2026-08-20"},
         headers=_bearer(True),
     )
     all_resp2 = client.get("/milestone/all", headers=_bearer(True))
-    assert len(all_resp2.json()) == 0
+    assert len(all_resp2.json()) == 1
+    assert all_resp2.json()[0]["status"] == "waiting"
+
+
+# 3b. Issue #9: /milestone/all は open + waiting の両方を含む(status != closed)
+def test_milestone_all_includes_waiting(client):
+    ms1 = _add(client, "M1").json()
+    ms2 = _add(client, "M2").json()
+    # M2 を waiting に
+    client.post(
+        f"/milestone/update/{ms2['id']}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    rows = client.get("/milestone/all", headers=_bearer(True)).json()
+    assert len(rows) == 2
+    by_title = {r["title"]: r["status"] for r in rows}
+    assert by_title["M1"] == "open"
+    assert by_title["M2"] == "waiting"
+    assert ms1["id"] in [r["id"] for r in rows]
 
 
 # 4. 追加(非 admin) → 403
@@ -81,7 +100,7 @@ def test_milestone_add_non_admin_forbidden(client):
     assert r.status_code == 403
 
 
-# 5. close: status=closed、子イベント completed=True
+# 5. accomplished_date 設定: status=waiting、子イベント completed=True (close 相当)
 def test_milestone_close_sets_completed(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
@@ -95,15 +114,15 @@ def test_milestone_close_sets_completed(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "closed"
+    assert body["status"] == "waiting"
 
     events = client.get("/event/all", headers=_bearer(True)).json()
     child = next(e for e in events if e["milestone_id"] == ms_id)
     assert child["completed"] is True
 
 
-# 6. close 済みを再度 update → 409
-def test_milestone_reclose_returns_409(client):
+# 6. waiting で再び accomplished_date 指定 → 200、status は waiting のまま (409 にならない)
+def test_milestone_mark_accomplished_twice_keeps_waiting(client):
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
     r1 = client.post(
@@ -112,12 +131,15 @@ def test_milestone_reclose_returns_409(client):
         headers=_bearer(True),
     )
     assert r1.status_code == 200
+    assert r1.json()["status"] == "waiting"
     r2 = client.post(
         f"/milestone/update/{ms_id}",
         json={"accomplished_date": "2026-08-21"},
         headers=_bearer(True),
     )
-    assert r2.status_code == 409
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "waiting"
+    assert r2.json()["accomplished_date"] == "2026-08-21"
 
 
 # 7. 存在しない id → 404
@@ -166,3 +188,72 @@ def test_event_update_sets_completed(client):
     r = client.post("/event/update/1", json={"completed": True}, headers=_bearer(True))
     assert r.status_code == 200
     assert r.json()["completed"] is True
+
+
+# --- Issue #9: update 編集対応 & waiting 遷移 ---
+
+# 11. title のみ編集 → 200、title 反映、status は open のまま (accomplished_date 未指定)
+def test_milestone_update_edits_title_only(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"title": "renamed"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["title"] == "renamed"
+    assert body["status"] == "open"
+    assert body["accomplished_date"] is None
+
+
+# 12. accomplished_date 設定 → 200、status は waiting (closed ではない)
+def test_milestone_update_accomplished_sets_waiting(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "waiting"
+    assert body["accomplished_date"] == "2026-08-20"
+
+
+# 13. waiting に accomplished_date=null を明示 → re-open(open)、accomplished_date は None
+def test_milestone_reopen_from_waiting(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": None},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "open"
+    assert body["accomplished_date"] is None
+
+
+# 14. guideline_end_date / description 編集 → 反映される
+def test_milestone_update_edits_meta(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"description": "desc", "guideline_end_date": "2026-09-01"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["description"] == "desc"
+    assert body["guideline_end_date"] == "2026-09-01"
+    assert body["status"] == "open"
