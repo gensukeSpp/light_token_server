@@ -154,6 +154,7 @@ def test_milestone_update_not_found(client):
 
 # 8. 削除(admin) → 200 {"closed": id}、DB からは消えず status=closed、子イベント completed=True
 def test_milestone_remove_closes_instead_of_delete(client):
+
     ms = _add(client, "M1")
     ms_id = ms.json()["id"]
     ev = _add_event(client, milestone_id=ms_id)
@@ -257,3 +258,36 @@ def test_milestone_update_edits_meta(client):
     assert body["description"] == "desc"
     assert body["guideline_end_date"] == "2026-09-01"
     assert body["status"] == "open"
+
+
+# 15. closed 化(remove)後の再 update → 409 (契約: closed + any は拒否)
+def test_milestone_update_after_closed_returns_409(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    r = client.delete(f"/milestone/remove/{ms_id}", headers=_bearer(True))
+    assert r.status_code == 200
+    assert r.json() == {"closed": ms_id}
+
+    for body in (
+        {"title": "renamed"},
+        {"accomplished_date": "2026-08-20"},
+        {"accomplished_date": None},
+    ):
+        resp = client.post(f"/milestone/update/{ms_id}", json=body, headers=_bearer(True))
+        assert resp.status_code == 409, body
+
+
+# 16. waiting 中のマイルストーンの色は「使用中」とみなし、新規作成は別色を選ぶ
+def test_next_color_counts_waiting_as_used(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    first_color = ms.json()["color"]
+    # waiting へ遷移しても色は解放されない
+    client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    r2 = _add(client, "M2")
+    assert r2.status_code == 201
+    assert r2.json()["color"] != first_color

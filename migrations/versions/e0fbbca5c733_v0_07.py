@@ -28,6 +28,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # v0.06 で Boolean -> String(10) に型変更した際、既存行はリテラル
+    # 'true'/'false' のまま残っている (PostgreSQL の暗黙キャスト)。
+    # 新 API の status 契約 ('open'/'waiting'/'closed' の完全一致) を満たすため、
+    # 旧値を正規化してから新 API を有効化する (PR #10 レビュー P1)。
+    op.execute("UPDATE \"M_MILESTONE\" SET \"status\" = 'open' WHERE \"status\" = 'true'")
+    op.execute("UPDATE \"M_MILESTONE\" SET \"status\" = 'closed' WHERE \"status\" = 'false'")
+
     # 列名リネーム(データ保持)
     op.alter_column(
         'M_MILESTONE',
@@ -38,6 +45,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
+    # 正規化した 'open'/'closed' を旧 boolean リテラルへ戻す
+    # (waiting は v0.06 以前に存在しない値のため、旧値への変換対象外)。
+    op.execute("UPDATE \"M_MILESTONE\" SET \"status\" = 'true' WHERE \"status\" = 'open'")
+    op.execute("UPDATE \"M_MILESTONE\" SET \"status\" = 'false' WHERE \"status\" = 'closed'")
     op.alter_column(
         'M_MILESTONE',
         'guideline_end_date',

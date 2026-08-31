@@ -1,66 +1,105 @@
-# GitHub Copilot instructions — light-token-server
-
-Short, repo-specific guidance for Copilot sessions working on this repository.
+# Copilot instructions — light-token-server
 
 ## Build, test, and lint commands
-- Activate venv first (required):
-  source .venv/bin/activate
 
-- Run all tests (project uses uv as package runner):
-  uv run pytest
+The repository targets Python 3.13 and manages dependencies with `uv`. The virtual
+environment is not automatically activated:
 
-- Run a single test (example):
-  uv run pytest tests/test_login.py::test_login_success_sets_session
+```bash
+source .venv/bin/activate
+```
 
-- Run server locally:
-  source .venv/bin/activate && uvicorn app.main:app --reload
+Run the full test suite:
 
-- Linting: no project lint tool/config detected. Apply repo-preferred linters (black/ruff/mypy) manually.
+```bash
+source .venv/bin/activate && uv run pytest
+```
 
-## High-level architecture (big picture)
-- FastAPI backend located under `app/`.
-  - app/main.py: FastAPI app, SessionMiddleware, router inclusion and `/health`.
-  - app/routers/login.py: login/logout/index endpoints, Jinja2 templates under `app/templates`.
-  - app/config.py: environment-driven config (DB URL, SECRET_KEY, ENV, APP_URL).
-  - app/database_base.py: SQLAlchemy engine, SessionLocal, Base, and get_db dependency.
-  - app/models.py: legacy schema (UPPERCASE column names and table names) used by ORM.
-  - app/security.py: login_required dependency that reads session cookie and loads StaffLogin.
-  - app/schemas.py: Pydantic schemas (forms).
+Run one test or one test module:
 
-- Tests: `tests/` use an in-memory SQLite engine and override `get_db` via TestClient (see tests/conftest.py). This is the canonical pattern for unit-tests here.
+```bash
+source .venv/bin/activate && uv run pytest tests/test_login.py::test_login_success_sets_session
+source .venv/bin/activate && uv run pytest tests/test_milestone.py
+```
 
-- Migrations: Alembic config is present (alembic.ini / migrations/) but running DB migrations is explicitly left to the repository owner; do not run them automatically in Copilot tasks.
+Run the development server:
 
-## Key conventions (repo-specific)
-- Always activate the provided virtualenv (.venv) before running `uv`, `pytest`, or `uvicorn`.
+```bash
+source .venv/bin/activate && uvicorn app.main:app --reload
+```
 
-- DB access must use the FastAPI dependency `get_db` (db: Session = Depends(get_db)). Do NOT instantiate SessionLocal() directly in app code — tests override get_db.
+`pyproject.toml` defines pytest's test path as `tests/` and adds the repository
+root to `PYTHONPATH`. No project lint script or lint configuration is currently
+defined.
 
-- Legacy DB shape: models keep old table/column names (e.g. M_STAFFINFO, M_TEAM). Preserve column names and EventORM.to_dict() ISO timestamp format "%Y-%m-%dT%H:%M:%S.000Z" when working with serialization.
+## High-level architecture
 
-- Authentication: session-based httpOnly cookie implemented with Starlette SessionMiddleware (secret_key from env). In production ensure https_only when ENV=="production".
+- `app/main.py` creates the FastAPI application, installs session and CORS
+  middleware, includes the login and timetable routers, and exposes `/health`.
+- `app/routers/login.py` implements the Japanese HTML login flow (`/login`,
+  `/logout`, `/`) with Jinja2 templates in `app/templates/`. Successful login
+  stores `user_id` in the Starlette session.
+- `app/routers/timetable.py` implements the token handoff to the companion
+  `time-table-to-line` app, refresh, event/group APIs, and milestone APIs.
+- `app/tokens.py` handles HS256 JWT creation/validation and the hybrid auth
+  transport: `Authorization: Bearer ...` is preferred, with httpOnly
+  `access_token`/`refresh_token` cookies as fallback. `require_token` also
+  verifies that the referenced `StaffLogin` still exists.
+- `app/security.py` provides the session-based `login_required` dependency;
+  `app/database_base.py` owns the SQLAlchemy engine/session factory and the
+  `get_db` dependency; `app/config.py` loads database, application URL, session
+  secret, and token lifetime settings from the environment.
+- `app/models.py` maps the legacy database schema (`M_STAFFINFO`, `M_TEAM`,
+  `M_LOGININFO`, `T_TIMELINE_EVENT`) plus milestone tables. Pydantic request
+  models live in `app/schemas.py`.
+- Tests use FastAPI `TestClient` and override `get_db` with an in-memory SQLite
+  database using `StaticPool`, so schema setup and dependency overrides are part
+  of the test architecture rather than a real database requirement.
 
-- Passwords: keep using werkzeug.generate_password_hash / check_password_hash so existing hashes remain valid.
+## Key conventions
 
-- Templates: Jinja2 templates expect request-first TemplateResponse(request, "name.html", ctx). Redirects use HTTPException(303, headers={"Location": ...}) (Starlette 1.4.1 compatibility) rather than raising RedirectResponse.
+- Read `AGENTS.md` and `requirement-02.md` before changing authentication or
+  database behavior. For any milestone work, read
+  `.hermes/rules/milestones.md` and `requirement-03.md`; the milestone rules are
+  intentionally maintained separately because they change frequently.
+- All application database access must use `db: Session = Depends(get_db)`.
+  Do not instantiate `SessionLocal()` directly in routers, dependencies, or
+  services; tests rely on overriding `get_db`.
+- Preserve legacy table and column names, including uppercase model attributes.
+  Preserve `EventORM.to_dict()` output keys and its timestamp format
+  `%Y-%m-%dT%H:%M:%S.000Z`.
+- Keep the token contract with `time-table-to-line`: `/timetable/auth` redirects
+  with `?token=<access-token>` and sets auth cookies; `/refresh` accepts the
+  existing client token contract and returns JSON containing the new
+  `access_token` while refreshing the cookie.
+- Access JWT claims are `user_id`, `group_id`, `admin`, `type`, and `exp`.
+  Protected timetable and milestone endpoints use `Depends(require_token)`;
+  session-protected HTML pages use `Depends(login_required)`.
+- Keep password compatibility through Werkzeug's
+  `generate_password_hash`/`check_password_hash`. Do not replace it with a new
+  hashing scheme without an explicit migration plan.
+- Keep `SessionMiddleware` httpOnly behavior and enable `https_only` when
+  `ENV == "production"`. Do not expose, log, or commit `.env` contents or
+  credentials.
+- Use Pydantic models with `Annotated[..., Form()]` for form bodies. Templates
+  use request-first `TemplateResponse(request, ...)`; redirects should use the
+  repository's Starlette-compatible `RedirectResponse(..., status_code=303)`
+  pattern.
+- Milestones are shared across groups and use the `open`, `waiting`, and
+  `closed` states. `/milestone/remove` is a soft close, and setting
+  `accomplished_date` transitions to `waiting` and completes child events.
+  Preserve the fixed color palette and the event default/clicked colors defined
+  by the milestone rules.
+- Do not run Alembic/database migrations automatically. The repository owner
+  performs the PostgreSQL migration separately.
+- Do not reintroduce removed Flask modules or imports (`routes.py`,
+  `auth_middleware.py`). The active application is FastAPI-only.
+- UI copy is Japanese, and the templates are plain HTML/htmx-oriented rather
+  than Bootstrap-based.
 
-- Forms: endpoint form bodies use Pydantic models + Annotated[Model, Form()] (requires python-multipart).
+## Related repository guidance
 
-- Tests: When adding or modifying tests, follow tests/conftest.py pattern (StaticPool + sqlite:// memory) so TestClient thread worker retains tables.
-
-- Environment: primary env variables used are DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME (or DATABASE_URL), SECRET_KEY, ENV, CLOUD_TIMETABLE4 (APP_URL). `.env` is gitignored — do not commit secrets.
-
-## Existing AI-agent / assistant configs to incorporate
-- AGENTS.md and GEMINI.md contain the repository migration plan and key constraints (activate venv, don't run migrations, keep legacy models). Use them as authoritative context.
-- .github/agents/pr-review.md defines a local PR-review agent; Copilot sessions may invoke it for PR reviews.
-
-## Quick checklist for Copilot sessions
-- Read requirement-02.md and AGENTS.md before implementing auth/DB changes.
-- Do not import or modify Flask-era modules `app/routes.py` or `app/auth_middleware.py` until they've been migrated to FastAPI.
-- Preserve legacy model names/column case when touching models or serializations.
-- Use dependency override pattern in tests when creating DB fixtures.
-
-
----
-
-If helpful, configure an MCP server for end-to-end/browser testing (e.g., Playwright). Would you like an MCP server configured for Playwright or similar? (yes/no)
+`AGENTS.md`, `GEMINI.md`, `requirement-02.md`, `requirement-03.md`, and
+`.hermes/rules/milestones.md` are authoritative project guidance. The local
+`.github/agents/pr-review.md` defines the expected workflow and Japanese output
+format for PR reviews; follow it when using that review agent.

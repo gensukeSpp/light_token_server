@@ -36,7 +36,7 @@ from ..tokens import (
 router = APIRouter()
 
 # マイルストーン用 10 固定カラーパレット (AGENTS.md / requirement-03.md)。
-# open 中のマイルストーンと被らない色を _next_color が順に選ぶ。
+# 一覧に表示中 (open + waiting) のマイルストーンと被らない色を _next_color が順に選ぶ。
 MILESTONE_COLORS = [
     "#9c27b0", "#009688", "#795548", "#607d8b", "#e91e63",
     "#3f51b5", "#00bcd4", "#ff5722", "#8bc34a", "#ff9800",
@@ -44,12 +44,14 @@ MILESTONE_COLORS = [
 
 
 def _next_color(db: Session) -> str:
-    """open 中のマイルストーンが使っている色を避け、未使用色を先頭から返す。
+    """一覧表示中 (open + waiting) のマイルストーンが使っている色を避け、未使用色を先頭から返す。
     10 件全部使われていれば先頭 (MILESTONE_COLORS[0]) に cyclic に戻す。
     """
     used = {
         m.color
-        for m in db.query(MilestoneORM).filter(MilestoneORM.status == MILESTONE_OPEN).all()
+        for m in db.query(MilestoneORM)
+        .filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]))
+        .all()
     }
     for c in MILESTONE_COLORS:
         if c not in used:
@@ -277,16 +279,17 @@ def get_open_milestones(
     db: Session = Depends(get_db),
 ):
     # Issue #9: open + waiting を返す (closed を除く)。waiting の猶予期間中一覧表示に対応。
+    # status.in_ で完全一致にする: 旧 boolean 由来の未知のステータス値を公開一覧へ流さない。
     rows = (
         db.query(MilestoneORM)
-        .filter(MilestoneORM.status != MILESTONE_CLOSED)
+        .filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]))
         .all()
     )
     return [m.to_dict() for m in rows]
 
 
 @router.post("/milestone/update/{milestone_id}")
-def close_milestone(
+def update_milestone(
     milestone_id: int,
     body: MilestoneUpdate,
     claims: dict = Depends(require_token),

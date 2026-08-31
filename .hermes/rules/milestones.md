@@ -35,12 +35,12 @@
 
 ## Color rules
 - 10 固定パターン: ` #9c27b0 #009688 #795548 #607d8b #e91e63 #3f51b5 #00bcd4 #ff5722 #8bc34a #ff9800`
-- 作成時、open マイルストーンと被らない色を自動選択
+- 作成時、一覧表示中 (open + waiting) のマイルストーンと被らない色を自動選択
 - 10 件超えた場合は 1 番目の色から cyclic に戻す
 
 ## API endpoints
 - `POST /milestone/add` — admin のみ、カラータブルから衝突回避
-- `GET /milestone/all` — open + waiting 一覧(`status != "closed"` を返す。Issue #9 で変更多)
+- `GET /milestone/all` — open + waiting 一覧(`status.in_(["open", "waiting"])` の完全一致。旧 boolean 由来の未知ステータス値を公開しない。Issue #9 で変更多)
 - `POST /milestone/update/{id}` — admin のみ・部分更新(`title?` / `description?` / `guideline_end_date?` / `accomplished_date?`)。編集フィールドは None 以外を反映し status 不変。`accomplished_date` 値あり → `waiting` + 子 completed=True、明示 `null` → re-open(`open`)
 - `DELETE /milestone/remove/{id}` — admin のみ、削除でなく `status=closed`(子 completed=True)を返す `{"closed": id}`
 - `POST /event/add` — `milestone_id` optional 追加
