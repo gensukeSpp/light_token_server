@@ -10,14 +10,14 @@ uv.lock
 .playwright-mcp/
 
 # For release
-# docker-compose.yml
-# .gemini/
-# .github/
-# .hermes/
-# .roo/
-# docs/
-# tasks/
-# AGENT.md
-# GEMINI.md
-# requirement-02.md
-# requirement-03.md
+docker-compose.yml
+.gemini/
+.github/
+.hermes/
+.roo/
+docs/
+tasks/
+AGENT.md
+GEMINI.md
+requirement-02.md
+requirement-03.md
