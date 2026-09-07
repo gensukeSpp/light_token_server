@@ -44,7 +44,7 @@
 - `POST /milestone/update/{id}` — admin のみ・部分更新(`title?` / `description?` / `guideline_end_date?` / `accomplished_date?`)。編集フィールドは None 以外を反映し status 不変。`accomplished_date` 値あり → `waiting` + 子 completed=True、明示 `null` → re-open(`open`)
 - `DELETE /milestone/remove/{id}` — admin のみ、削除でなく `status=closed`(子 completed=True)を返す `{"closed": id}`
 - `POST /event/add` — `milestone_id` optional 追加
-- `POST /event/update/{id}` — `completed` 対応
+- `POST /event/update/{id}` — `completed` 対応。`milestone_id` は `model_fields_set` で判別し、明示的 `null` 送信で「所属なし」(milestone_id=None) として保存可(2026-09 追加。色のデフォルト復帰は未実装)
 
 ## UI conventions
 - Japanese date format (UTC+9) for display only (stored as-is)

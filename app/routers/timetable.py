@@ -198,7 +198,10 @@ def update_event_item(
         target.summary = body.summary
     if body.progress is not None:
         target.progress = body.progress
-    if body.milestone_id is not None:
+    # milestone_id の扱い: model_fields_set で「送られたか(None でも)」を判別
+    # (update_milestone の accomplished_date と同じパターン)。
+    # 明示的 null -> 所属なし (milestone_id=None) として保存する。
+    if "milestone_id" in body.model_fields_set:
         target.milestone_id = body.milestone_id
     if body.completed is not None:
         target.completed = body.completed
