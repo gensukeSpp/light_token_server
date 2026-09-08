@@ -1,11 +1,26 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .config import APP_URL, ENV, SECRET_KEY
+from .config import APP_URL, ENABLE_MILESTONE_SCHEDULER, ENV, SECRET_KEY
 from .routers import login, timetable
+from .scheduler import create_milestone_scheduler
 
-app = FastAPI(title="light-token-server")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = None
+    if ENABLE_MILESTONE_SCHEDULER:
+        scheduler = create_milestone_scheduler()
+        scheduler.start()
+    yield
+    if scheduler:
+        scheduler.shutdown()
+
+
+app = FastAPI(title="light-token-server", lifespan=lifespan)
 
 app.add_middleware(
     SessionMiddleware,
