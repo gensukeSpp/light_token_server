@@ -21,7 +21,9 @@
   - `completed: Boolean, default=False` — 完了フラグ
 
 ## Semantic rules
-- `status="open"` → 作成直後。`status="closed"` → 達成済み(本実装では `/milestone/remove` のみ generated)。`status="waiting"` → 再 open の猶予期間(waiting for close)
+- `status="open"` → 作成直後。`status="closed"` → 達成済み。`status="waiting"` → 再 open の猶予期間(waiting for close)
+- **closed の発生経路は 2 つ**: (1) `/milestone/remove` による即時 closed(作成ミス用・子 completed=True)、
+  (2) waiting からの**自動 closed**(Task-11, 2026-09-08。グレース期間経過後、子イベント completed は不変。下記 API endpoints 参照)
 - **accomplished_date 設定時は `waiting` へ遷移**(`closed` へ直接遷移しない)。`waiting` 中は子イベントの `completed=True` を自動更新(close 相当)
 - **`waiting` からは re-open 可**: update で `accomplished_date` に `null` を明示すると `open` へ戻る。イベントの `completed` は変更しない(非破壊)
 - 一度 `closed` にしたマイルストーンへの再 update は 409 で拒否(API レイヤ)。本 Issue では閉じの確定はデータ上生成しない → re-open は waiting 由来のみ
@@ -43,6 +45,18 @@
 - `GET /milestone/all` — open + waiting 一覧(`status.in_(["open", "waiting"])` の完全一致。旧 boolean 由来の未知ステータス値を公開しない。Issue #9 で変更多)
 - `POST /milestone/update/{id}` — admin のみ・部分更新(`title?` / `description?` / `guideline_end_date?` / `accomplished_date?`)。編集フィールドは None 以外を反映し status 不変。`accomplished_date` 値あり → `waiting` + 子 completed=True、明示 `null` → re-open(`open`)
 - `DELETE /milestone/remove/{id}` — admin のみ、削除でなく `status=closed`(子 completed=True)を返す `{"closed": id}`
+- 自動 closed (Task-11, 2026-09-08 実装): `waiting` のマイルストーンは猶予期間(グレース)経過後、
+  APScheduler のバックグラウンドジョブ(FastAPI lifespan で起動)により**自動で `closed` へ確定遷移**する。
+  - 猶予日数: `MILESTONE_CLOSE_GRACE_DAYS`(env, デフォルト 5 日)。境界は
+    `accomplished_date + GRACE_DAYS <= today`(`<=` 採用。+5 日目の当日をもって closed 確定)
+  - 実行間隔: `MILESTONE_CLOSE_INTERVAL_MINUTES`(env, デフォルト 60 分)。
+    自動起動無効化: `ENABLE_MILESTONE_SCHEDULER=false`(dev / テスト用, デフォルト true)
+  - 実装: `app/jobs/close_milestones.py`(`close_expired_waiting_milestones(db, today)` 純粋関数 +
+    `execute_close_job()` エントリポイント)、`app/scheduler.py`、`app/main.py` の lifespan
+  - **子イベント `completed` は変更しない**(waiting 遷移時に既に True)。closed 確定後の
+    子イベント completed の整合は次のタスクで扱う
+  - closed 化されたマイルストーンは `/milestone/all`(open + waiting のみ)から自動で外れ、
+    所属イベントはデフォルト色 `#2196f3` に戻る(フロント変更不要)
 - `POST /event/add` — `milestone_id` optional 追加
 - `POST /event/update/{id}` — `completed` 対応。`milestone_id` は `model_fields_set` で判別し、明示的 `null` 送信で「所属なし」(milestone_id=None) として保存可(2026-09 追加。色のデフォルト復帰は未実装)
 
