@@ -8,7 +8,11 @@ This skill automates the process of generating high-level architecture snapshots
 
 ## Workflow
 
-1. **Identify Changes:**
+1. **実装確認:**
+   - `tasks/` 以下の該当Issue/タスクの `README.md` を読み、完了条件（Done）が全て満たされているか確認する。
+   - 満たされていない場合は、実装タスクを優先し、このスキルの実行を中断する。
+
+2. **Identify Changes:**
    - Use `invoke_agent` with the `codebase_investigator` to:
      - Determine the base branch (usually `origin/main`).
      - Run `gh pr view` to fetch PR details if the current branch is part of a Pull Request.
@@ -16,7 +20,7 @@ This skill automates the process of generating high-level architecture snapshots
      - Identify changed source code files compared to the base branch.
      - List commits between base and current head.
 
-2. **Generate Snapshot:**
+3. **Generate Snapshot:**
    - Create a new file in `docs/architecture/` with the current date: `YYYY-MM-DD-architecture.md`.
    - Populate with:
      - Purpose (Brief explanation of changes).
@@ -27,7 +31,7 @@ This skill automates the process of generating high-level architecture snapshots
      - Commits list.
      - Changed files list.
 
-3. **Update Registry:**
+4. **Update Registry:**
    - Update `docs/architecture/README.md` to include the new entry in the table.
 
 ## Usage

@@ -4,9 +4,13 @@
 本テストはその影響を受けないよう Bearer トークンを直接生成して送る方式を使う。
 """
 
+import datetime
+
 import jwt
 
 from app import tokens
+from app.jobs.close_milestones import close_expired_waiting_milestones
+from app.models import MILESTONE_CLOSED, MILESTONE_OPEN, MILESTONE_WAITING, MilestoneORM
 from app.routers.timetable import MILESTONE_COLORS
 
 
@@ -244,6 +248,44 @@ def test_milestone_reopen_from_waiting(client):
     assert body["accomplished_date"] is None
 
 
+# 13b. Task-12: waiting からの re-open で子イベント completed が False に戻る
+def test_milestone_reopen_resets_child_completed(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    ev1 = _add_event(client, milestone_id=ms_id)
+    ev2 = _add_event(client, milestone_id=ms_id)
+    assert ev1.status_code == 201
+    assert ev2.status_code == 201
+
+    # waiting へ遷移 → 子イベント completed=True
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "waiting"
+    events = client.get("/event/all", headers=_bearer(True)).json()
+    children = [e for e in events if e["milestone_id"] == ms_id]
+    assert len(children) == 2
+    assert all(e["completed"] is True for e in children)
+
+    # re-open (accomplished_date=null) → 子イベント completed=False に戻る
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": None},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "open"
+    assert body["accomplished_date"] is None
+    events = client.get("/event/all", headers=_bearer(True)).json()
+    children = [e for e in events if e["milestone_id"] == ms_id]
+    assert len(children) == 2
+    assert all(e["completed"] is False for e in children)
+
+
 # 14. guideline_end_date / description 編集 → 反映される
 def test_milestone_update_edits_meta(client):
     ms = _add(client, "M1")
@@ -291,3 +333,133 @@ def test_next_color_counts_waiting_as_used(client):
     r2 = _add(client, "M2")
     assert r2.status_code == 201
     assert r2.json()["color"] != first_color
+
+
+# --- Task-11: グレース期間後の自動 closed 遷移 ---
+
+TODAY = datetime.date(2026, 9, 10)
+
+
+def _make_waiting(client, title, accomplished: str) -> int:
+    """API 経由で waiting 状態のマイルストーンを作り、id を返す。"""
+    ms = _add(client, title)
+    assert ms.status_code == 201
+    ms_id = ms.json()["id"]
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": accomplished},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "waiting"
+    return ms_id
+
+
+def _set_accomplished_directly(factory, ms_id: int, accomplished: datetime.date):
+    """テスト用: DB 直操作で accomplished_date を過去日付へ調整する。"""
+    db = factory()
+    try:
+        ms = db.query(MilestoneORM).filter(MilestoneORM.id == ms_id).first()
+        ms.accomplished_date = accomplished
+        db.commit()
+    finally:
+        db.close()
+
+
+def _status_of(factory, ms_id: int) -> str:
+    db = factory()
+    try:
+        return (
+            db.query(MilestoneORM)
+            .filter(MilestoneORM.id == ms_id)
+            .first()
+            .status
+        )
+    finally:
+        db.close()
+
+
+# 17. 猶予内 (today - 3日) → 0 件、waiting のまま
+def test_auto_close_before_grace(client, db_session_factory):
+    ms_id = _make_waiting(client, "M1", "2026-09-07")  # API 契約確認用
+    _set_accomplished_directly(db_session_factory, ms_id, TODAY - datetime.timedelta(days=3))
+    n = close_expired_waiting_milestones(db_session_factory(), TODAY)
+    assert n == 0
+    assert _status_of(db_session_factory, ms_id) == MILESTONE_WAITING
+
+
+# 18. 猶予超過 (today - 6日) → 1 件 closed
+def test_auto_close_after_grace(client, db_session_factory):
+    ms_id = _make_waiting(client, "M1", "2026-09-07")
+    _set_accomplished_directly(db_session_factory, ms_id, TODAY - datetime.timedelta(days=6))
+    n = close_expired_waiting_milestones(db_session_factory(), TODAY)
+    assert n == 1
+    assert _status_of(db_session_factory, ms_id) == MILESTONE_CLOSED
+
+
+# 19. open / closed は対象外。waiting 超過のみ closed 化
+def test_auto_close_only_waiting(client, db_session_factory):
+    open_ms = _add(client, "OPEN_MS").json()
+    closed_ms = _add(client, "CLOSED_MS").json()
+    r = client.delete(f"/milestone/remove/{closed_ms['id']}", headers=_bearer(True))
+    assert r.status_code == 200
+    waiting_id = _make_waiting(client, "WAITING_MS", "2026-09-07")
+    _set_accomplished_directly(db_session_factory, waiting_id, TODAY - datetime.timedelta(days=6))
+
+    n = close_expired_waiting_milestones(db_session_factory(), TODAY)
+    assert n == 1
+    assert _status_of(db_session_factory, open_ms["id"]) == MILESTONE_OPEN
+    assert _status_of(db_session_factory, closed_ms["id"]) == MILESTONE_CLOSED
+    assert _status_of(db_session_factory, waiting_id) == MILESTONE_CLOSED
+
+
+# 20. 子イベント completed は自動 closed で変更されない (True のまま)
+def test_auto_close_keeps_completed(client, db_session_factory):
+    ms = _add(client, "M1")
+    assert ms.status_code == 201
+    ms_id = ms.json()["id"]
+    ev = _add_event(client, milestone_id=ms_id)
+    assert ev.status_code == 201
+    ev_id = ev.json()["id"]
+
+    # waiting 遷移 (子イベント completed=True になる)
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-09-07"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "waiting"
+
+    _set_accomplished_directly(db_session_factory, ms_id, TODAY - datetime.timedelta(days=6))
+    assert close_expired_waiting_milestones(db_session_factory(), TODAY) == 1
+    assert _status_of(db_session_factory, ms_id) == MILESTONE_CLOSED
+
+    # 自動 closed では子イベント completed を変更しない (決定事項 3)
+    events2 = client.get("/event/all", headers=_bearer(True)).json()
+    child2 = next(e for e in events2 if e["id"] == ev_id)
+    assert child2["completed"] is True
+    assert child2["milestone_id"] == ms_id
+
+
+# 21. 境界: accomplished_date + 5日 == today → 当日をもって closed (`<=` 採用)
+def test_auto_close_boundary(client, db_session_factory):
+    in_grace_id = _make_waiting(client, "IN_GRACE", "2026-09-07")
+    _set_accomplished_directly(db_session_factory, in_grace_id, TODAY - datetime.timedelta(days=4))
+    assert close_expired_waiting_milestones(db_session_factory(), TODAY) == 0
+    assert _status_of(db_session_factory, in_grace_id) == MILESTONE_WAITING
+
+    boundary_id = _make_waiting(client, "BOUNDARY", "2026-09-07")
+    _set_accomplished_directly(db_session_factory, boundary_id, TODAY - datetime.timedelta(days=5))
+    assert close_expired_waiting_milestones(db_session_factory(), TODAY) == 1
+    assert _status_of(db_session_factory, boundary_id) == MILESTONE_CLOSED
+
+
+# 22. accomplished_date が None (open) → 対象外。None を誤って閉じない
+def test_auto_close_no_accomplished(client, db_session_factory):
+    ms = _add(client, "M1")
+    assert ms.status_code == 201
+    ms_id = ms.json()["id"]
+    n = close_expired_waiting_milestones(db_session_factory(), TODAY)
+    assert n == 0
+    assert _status_of(db_session_factory, ms_id) == MILESTONE_OPEN

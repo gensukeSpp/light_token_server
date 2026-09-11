@@ -8,3 +8,4 @@
 | 2026-08-24 | [Milestone Management Feature](2026-08-24-architecture.md) |
 | 2026-08-28 | [Milestone Data Schema & Soft Delete Implementation](2026-08-28-1-architecture.md) |
 | 2026-08-28 | [Milestone Update API Expansion & Status Management](2026-08-28-2-architecture.md) |
+| 2026-09-08 | [Milestone Auto-Close Implementation](2026-09-08-1-architecture.md) |

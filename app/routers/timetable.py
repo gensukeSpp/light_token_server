@@ -198,7 +198,10 @@ def update_event_item(
         target.summary = body.summary
     if body.progress is not None:
         target.progress = body.progress
-    if body.milestone_id is not None:
+    # milestone_id の扱い: model_fields_set で「送られたか(None でも)」を判別
+    # (update_milestone の accomplished_date と同じパターン)。
+    # 明示的 null -> 所属なし (milestone_id=None) として保存する。
+    if "milestone_id" in body.model_fields_set:
         target.milestone_id = body.milestone_id
     if body.completed is not None:
         target.completed = body.completed
@@ -313,7 +316,7 @@ def update_milestone(
 
     # accomplished_date の扱い: model_fields_set で「送られたか(None でも)」を判別。
     #  - 値あり -> waiting (猶予期間) へ遷移 + 子イベント completed=True (close 相当)
-    #  - 明示的 None -> waiting から re-open (open) へ。イベント completed は変更しない。
+    #  - 明示的 None -> waiting から re-open (open) へ。子イベント completed を False に戻す。
     if "accomplished_date" in body.model_fields_set:
         if body.accomplished_date is not None:
             target.accomplished_date = body.accomplished_date
@@ -323,9 +326,14 @@ def update_milestone(
             ).all():
                 ev.completed = True
         else:
-            # re-open: waiting の再 open
+            # re-open: waiting の再 open。accomplished_date を None に戻し、
+            # waiting 遷移時に一括 True にした子イベント completed を False に戻す(配色復帰)。
             target.status = MILESTONE_OPEN
             target.accomplished_date = None
+            for ev in db.query(EventORM).filter(
+                EventORM.milestone_id == milestone_id
+            ).all():
+                ev.completed = False
 
     db.commit()
     db.refresh(target)
