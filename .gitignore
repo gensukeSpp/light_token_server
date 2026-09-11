@@ -9,7 +9,7 @@ logs/
 uv.lock
 .playwright-mcp/
 
-# For release
+# TODO: release branch で解除
 # docker-compose.yml
 # .gemini/
 # .github/
