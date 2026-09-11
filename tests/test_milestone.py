@@ -248,6 +248,44 @@ def test_milestone_reopen_from_waiting(client):
     assert body["accomplished_date"] is None
 
 
+# 13b. Task-12: waiting からの re-open で子イベント completed が False に戻る
+def test_milestone_reopen_resets_child_completed(client):
+    ms = _add(client, "M1")
+    ms_id = ms.json()["id"]
+    ev1 = _add_event(client, milestone_id=ms_id)
+    ev2 = _add_event(client, milestone_id=ms_id)
+    assert ev1.status_code == 201
+    assert ev2.status_code == 201
+
+    # waiting へ遷移 → 子イベント completed=True
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "waiting"
+    events = client.get("/event/all", headers=_bearer(True)).json()
+    children = [e for e in events if e["milestone_id"] == ms_id]
+    assert len(children) == 2
+    assert all(e["completed"] is True for e in children)
+
+    # re-open (accomplished_date=null) → 子イベント completed=False に戻る
+    r = client.post(
+        f"/milestone/update/{ms_id}",
+        json={"accomplished_date": None},
+        headers=_bearer(True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "open"
+    assert body["accomplished_date"] is None
+    events = client.get("/event/all", headers=_bearer(True)).json()
+    children = [e for e in events if e["milestone_id"] == ms_id]
+    assert len(children) == 2
+    assert all(e["completed"] is False for e in children)
+
+
 # 14. guideline_end_date / description 編集 → 反映される
 def test_milestone_update_edits_meta(client):
     ms = _add(client, "M1")

@@ -25,7 +25,8 @@
 - **closed の発生経路は 2 つ**: (1) `/milestone/remove` による即時 closed(作成ミス用・子 completed=True)、
   (2) waiting からの**自動 closed**(Task-11, 2026-09-08。グレース期間経過後、子イベント completed は不変。下記 API endpoints 参照)
 - **accomplished_date 設定時は `waiting` へ遷移**(`closed` へ直接遷移しない)。`waiting` 中は子イベントの `completed=True` を自動更新(close 相当)
-- **`waiting` からは re-open 可**: update で `accomplished_date` に `null` を明示すると `open` へ戻る。イベントの `completed` は変更しない(非破壊)
+- **`waiting` からは re-open 可**: update で `accomplished_date` に `null` を明示すると `open` へ戻る。
+  子イベントの `completed` は **`False` に戻す**(waiting 遷移で一括 `True` にしたものを復帰、配色を milestone color に戻す)
 - 一度 `closed` にしたマイルストーンへの再 update は 409 で拒否(API レイヤ)。本 Issue では閉じの確定はデータ上生成しない → re-open は waiting 由来のみ
 - `completed=True` または `milestone_id` が削除されたイベントはデフォルト色 (`#2196f3`) に変更
 - マイルストーンはグループ横断共有。`group_id` カラムは不要
