@@ -92,6 +92,14 @@ Calendar (タブ左)は、ユーザー個人での操作。 Timeline (タブ右)
 - マイルストーンの **再 open の猶予期間** を持たせるため、M_MILESTONE.status を String(10) に変更します。
   - 注入される値は、 open, waiting, closed を想定しています(waiting は、 waiting for close の意味)。
 
+### 2026/09/08 追記 (Task-11: 自動 closed 実装済み)
+- `waiting` のマイルストーンは猶予期間(グレース、デフォルト 5 日、env `MILESTONE_CLOSE_GRACE_DAYS`)経過後、
+  バックグラウンドジョブ(APScheduler, FastAPI lifespan で起動)により**自動で `closed` へ確定遷移**します。
+- 境界: `accomplished_date + GRACE_DAYS <= today` で当日をもって closed 確定。
+- 自動 closed では子イベント `completed` は変更しません(waiting 遷移時に True 済み)。
+  closed 確定後の子イベント completed の整合は次のタスクで扱う。
+- dev / テストでは env `ENABLE_MILESTONE_SCHEDULER=false` でスケジューラ自動起動を無効化できます。
+
 ## 今後の展望
 - 管理者権限による、タイムラインの操作
 	- イベントの伸縮・移動
