@@ -119,6 +119,7 @@ gives you structural context (callers, dependents, test coverage) that file sear
 - **Understanding impact**: `get_impact_radius_tool` instead of manually tracing imports
 - **Code review**: `detect_changes_tool` + `get_review_context_tool` instead of reading entire files
 - **Finding relationships**: `query_graph_tool` with callers_of/callees_of/imports_of/tests_for
+- **関数の定義元の探索**: **Serena のツール** (`serena` LSP) を活用する。呼び出し先・型定義の探索も同様に Serena を使う
 - **Architecture questions**: `get_architecture_overview_tool` + `list_communities_tool`
 
 ### Verify in the source

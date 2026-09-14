@@ -5,11 +5,16 @@
 """
 
 import datetime
+from zoneinfo import ZoneInfo
 
 import jwt
 
 from app import tokens
-from app.jobs.close_milestones import close_expired_waiting_milestones
+from app.jobs.close_milestones import (
+    MILESTONE_TIMEZONE,
+    close_expired_waiting_milestones,
+    jst_today,
+)
 from app.models import MILESTONE_CLOSED, MILESTONE_OPEN, MILESTONE_WAITING, MilestoneORM
 from app.routers.timetable import MILESTONE_COLORS
 
@@ -197,6 +202,7 @@ def test_event_update_sets_completed(client):
 
 # --- Issue #9: update 編集対応 & waiting 遷移 ---
 
+
 # 11. title のみ編集 → 200、title 反映、status は open のまま (accomplished_date 未指定)
 def test_milestone_update_edits_title_only(client):
     ms = _add(client, "M1")
@@ -369,12 +375,7 @@ def _set_accomplished_directly(factory, ms_id: int, accomplished: datetime.date)
 def _status_of(factory, ms_id: int) -> str:
     db = factory()
     try:
-        return (
-            db.query(MilestoneORM)
-            .filter(MilestoneORM.id == ms_id)
-            .first()
-            .status
-        )
+        return db.query(MilestoneORM).filter(MilestoneORM.id == ms_id).first().status
     finally:
         db.close()
 
@@ -463,3 +464,22 @@ def test_auto_close_no_accomplished(client, db_session_factory):
     n = close_expired_waiting_milestones(db_session_factory(), TODAY)
     assert n == 0
     assert _status_of(db_session_factory, ms_id) == MILESTONE_OPEN
+
+
+# --- PR #12 レビュー [P1] 対応: JST 基準の日付取得 ---
+
+
+# 23. タイムゾーン定数は Asia/Tokyo 固定 (サーバーが UTC でも UI 規約と一致)
+def test_milestone_timezone_is_jst():
+    assert MILESTONE_TIMEZONE == ZoneInfo("Asia/Tokyo")
+    # UTC との差分は +9 時間
+    assert MILESTONE_TIMEZONE.utcoffset(datetime.datetime(2026, 9, 11)) == datetime.timedelta(hours=9)
+
+
+# 24. jst_today() は OS のローカル TZ に依存せず JST の「今日」を返す
+#     (date.today() との一致/不一致を直接はテストできないので、
+#      `now(MILESTONE_TIMEZONE).date()` と一致することだけ確認する)
+def test_jst_today_matches_now_in_jst():
+    now_jst = datetime.datetime.now(MILESTONE_TIMEZONE)
+    assert jst_today() == now_jst.date()
+    assert jst_today() == datetime.date(2026, 9, 11) or jst_today() >= datetime.date(2026, 9, 11)
