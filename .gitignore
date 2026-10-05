@@ -10,18 +10,18 @@ uv.lock
 .playwright-mcp/
 
 # TODO: release branch で解除
-# docker-compose.yml
-# .gemini/
-# .github/
-# .hermes/
-# .roo/
-# docs/
-# specs/
-# tasks/
-# AGENT.md
-# GEMINI.md
-# requirement-02.md
-# requirement-03.md
+docker-compose.yml
+.gemini/
+.github/
+.hermes/
+.roo/
+docs/
+specs/
+tasks/
+AGENT.md
+GEMINI.md
+requirement-02.md
+requirement-03.md
 
 # Added by code-review-graph
 .code-review-graph/
