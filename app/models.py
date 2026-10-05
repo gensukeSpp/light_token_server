@@ -99,8 +99,8 @@ class EventORM(Base):
     start_time = Column(DateTime(), nullable=False)
     end_time = Column(DateTime(), nullable=False)
     title = Column(String(50), index=True, nullable=False)
-    summary = Column(String(50), nullable=True)
-    progress = Column(String(256), index=True, nullable=True)
+    summary = Column(String(256), nullable=True)
+    progress = Column(String(10), index=True, nullable=True)
     milestone_id = Column(Integer, ForeignKey("M_MILESTONE.id"), nullable=True)
     completed = Column(Boolean, server_default=expression.false(), nullable=False)
 
@@ -162,6 +162,8 @@ class MilestoneORM(Base):
             "color": self.color,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at is not None else None,
-            "guideline_end_date": (self.guideline_end_date.isoformat() if self.guideline_end_date is not None else None),
+            "guideline_end_date": (
+                self.guideline_end_date.isoformat() if self.guideline_end_date is not None else None
+            ),
             "accomplished_date": (self.accomplished_date.isoformat() if self.accomplished_date is not None else None),
         }

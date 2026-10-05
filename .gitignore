@@ -16,10 +16,13 @@ uv.lock
 # .hermes/
 # .roo/
 # docs/
+# specs/
 # tasks/
 # AGENT.md
 # GEMINI.md
 # requirement-02.md
 # requirement-03.md
+
 # Added by code-review-graph
 .code-review-graph/
+.better-code-review-graph/
