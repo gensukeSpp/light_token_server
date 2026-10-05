@@ -41,7 +41,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
 if ENV == "production" and not os.getenv("SECRET_KEY"):
     raise RuntimeError("SECRET_KEY must be set in production")
 # 本番環境ならこっち、削除しないでね
-# APP_URL = os.getenv("CALENDAR_TIMELINE", "https://time-table-to-line.ktde-z3837.workers.dev")
+# APP_URL = os.getenv("CALENDAR_TIMELINE", "https://calendar-to-timeline.ktde-z3837.workers.dev")
 # ローカルならこっち、削除しないでね
 APP_URL = os.getenv("CALENDAR_TIMELINE", "http://localhost:5173")
 
@@ -50,8 +50,8 @@ ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "24"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 # マイルストーン close 猶予(グレース)期間(日)。waiting 遷移後、この日数を経過して closed 確定。
-MILESTONE_CLOSE_GRACE_DAYS = int(os.getenv("MILESTONE_CLOSE_GRACE_DAYS", "5"))
+MILESTONE_CLOSE_GRACE_DAYS = int(os.getenv("MILESTONE_CLOSE_GRACE_DAYS", "0"))
 # 猶予チェックのバックグラウンド実行間隔(分)。dev で短くする用途。
-MILESTONE_CLOSE_INTERVAL_MINUTES = int(os.getenv("MILESTONE_CLOSE_INTERVAL_MINUTES", "60"))
+MILESTONE_CLOSE_INTERVAL_MINUTES = int(os.getenv("MILESTONE_CLOSE_INTERVAL_MINUTES", "1"))
 # False のときスケジューラを自動起動しない(dev / テスト用)。default True(production 想定)
 ENABLE_MILESTONE_SCHEDULER = os.getenv("ENABLE_MILESTONE_SCHEDULER", "true").lower() == "true"

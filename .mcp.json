@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "code-review-graph": {
+      "command": "uvx",
+      "args": [
+        "code-review-graph",
+        "serve"
+      ],
+      "cwd": "/home/nabu_dvl/workspace/the-calendar-to-timeline/light_token_server",
+      "type": "stdio"
+    }
+  }
+}
