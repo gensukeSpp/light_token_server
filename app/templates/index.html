@@ -3,7 +3,7 @@
 {% block content %}
 <h1>ホーム</h1>
 {% if user %}<p>ようこそ、スタッフID {{ user.STAFFID }} さん</p>{% endif %}
-<p><a href="/timetable/auth">time-table-to-line へ</a></p>
+<p><a href="/timetable/auth">calendar-to-timeline へ</a></p>
 <form method="post" action="/logout">
     <button type="submit">ログアウト</button>
 </form>

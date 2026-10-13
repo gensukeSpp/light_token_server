@@ -52,6 +52,6 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 # マイルストーン close 猶予(グレース)期間(日)。waiting 遷移後、この日数を経過して closed 確定。
 MILESTONE_CLOSE_GRACE_DAYS = int(os.getenv("MILESTONE_CLOSE_GRACE_DAYS", "5"))
 # 猶予チェックのバックグラウンド実行間隔(分)。dev で短くする用途。
-MILESTONE_CLOSE_INTERVAL_MINUTES = int(os.getenv("MILESTONE_CLOSE_INTERVAL_MINUTES", "60"))
+MILESTONE_CLOSE_INTERVAL_MINUTES = int(os.getenv("MILESTONE_CLOSE_INTERVAL_MINUTES", "10"))
 # False のときスケジューラを自動起動しない(dev / テスト用)。default True(production 想定)
 ENABLE_MILESTONE_SCHEDULER = os.getenv("ENABLE_MILESTONE_SCHEDULER", "true").lower() == "true"
