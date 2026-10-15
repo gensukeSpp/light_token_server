@@ -10,3 +10,4 @@
 | 2026-08-28 | [Milestone Update API Expansion & Status Management](2026-08-28-2-architecture.md) |
 | 2026-09-08 | [Milestone Auto-Close Implementation](2026-09-08-1-architecture.md) |
 | 2026-09-11 | [Milestone Re-open Completeness Reset](2026-09-11-architecture.md) |
+| 2026-10-15 | [Milestone Event Retrieval API](2026-10-15-architecture.md) |

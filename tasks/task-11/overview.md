@@ -53,7 +53,7 @@
 1. **実行方式**: **FastAPI lifespan で APScheduler(BackgroundScheduler)を起動**する。(a) 採用。依存 `apscheduler` を追加。
 2. **猶予日数と境界**: `MILESTONE_CLOSE_GRACE_DAYS` の env、**デフォルト 5 日**。`accomplished_date + 5 日` **に達したら(当日をもって)closed 確定**。すなわち判定は `accomplished_date + GRACE_DAYS <= today`(`<=` 採用。+5 日目当日に確定、+4 日目までは猶予内)。
 3. **子イベント completed**: 自動 closed では **変更しない(何もしない)**。waiting 遷移時に既に `completed=True` になっているため。子イベント completed の整合は**次のタスク**で扱う(本次はスコープ外)。
-4. **スケジュール間隔などの既定値**: 記載のまま。`MILESTONE_CLOSE_INTERVAL_MINUTES`(デフォルト 60 分)、`ENABLE_MILESTONE_SCHEDULER`(デフォルト true)。いずれも env で調整可能。
+4. **スケジュール間隔などの既定値**: 記載のまま。`MILESTONE_CLOSE_INTERVAL_MINUTES`(デフォルト 10 分)、`ENABLE_MILESTONE_SCHEDULER`(デフォルト true)。いずれも env で調整可能。
 
 > 上記は確定仕様。実装は overview 冒頭の「構成方針」「(実装後)ディレクトリ構成」および
 > tasks.md / architecture.md / test-plan.md の各該当箇所に反映済み。

@@ -68,7 +68,7 @@ FastAPI app shutdown
 - DB セッションは `app.database_base.SessionLocal` をジョブ内で短期生成/破棄する
   (API の `get_db` 依存と混ぜない。認証不要の定期処理のため)。
 - 猶予日数は `app/config.py` に `MILESTONE_CLOSE_GRACE_DAYS`(env, デフォルト 5)、
-  実行間隔も `MILESTONE_CLOSE_INTERVAL_MINUTES`(env, デフォルト 60)、
+  実行間隔も `MILESTONE_CLOSE_INTERVAL_MINUTES`(env, デフォルト 10)、
   起動フラグ `ENABLE_MILESTONE_SCHEDULER`(env, デフォルト true)で調整可能にする。
 - **実行方式は確定済み(決定事項 1)**: FastAPI lifespan + BackgroundScheduler。cron 案は不採用。
 

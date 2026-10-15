@@ -34,7 +34,7 @@
 ## Permission model
 - `admin=True` のユーザー全員が作成/クローズ/削除可能
 - 従来の「そのグループの管理者」→ 誤解を招く表現。実態は「全 admin ユーザー」
-- 閲覧はグループ単位(既存のトークン `group_id` でフィルタ)
+- ~~閲覧はグループ単位(既存のトークン `group_id` でフィルタ)~~ マイルストーン本体は全グループ共有。所属イベントの参照は admin のみで全グループ横断
 - `GET /milestone/{milestone_id}/events` は admin のみ参照可能。対象 milestone はグループ横断共有のため、
   所属イベントも全グループから取得し、トークンの `group_id` では絞り込まない。
 - `GET /milestone/closed/{milestone_id}/events` も admin のみ。closed milestone のイベントを全グループから取得し、
@@ -56,7 +56,7 @@
   APScheduler のバックグラウンドジョブ(FastAPI lifespan で起動)により**自動で `closed` へ確定遷移**する。
   - 猶予日数: `MILESTONE_CLOSE_GRACE_DAYS`(env, デフォルト 5 日)。境界は
     `accomplished_date + GRACE_DAYS <= today`(`<=` 採用。+5 日目の当日をもって closed 確定)
-  - 実行間隔: `MILESTONE_CLOSE_INTERVAL_MINUTES`(env, デフォルト 60 分)。
+  - 実行間隔: `MILESTONE_CLOSE_INTERVAL_MINUTES`(env, デフォルト 10 分)。
     自動起動無効化: `ENABLE_MILESTONE_SCHEDULER=false`(dev / テスト用, デフォルト true)
   - 実装: `app/jobs/close_milestones.py`(`close_expired_waiting_milestones(db, today)` 純粋関数 +
     `execute_close_job()` エントリポイント)、`app/scheduler.py`、`app/main.py` の lifespan

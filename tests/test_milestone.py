@@ -654,3 +654,137 @@ def test_jst_today_matches_now_in_jst():
     now_jst = datetime.datetime.now(MILESTONE_TIMEZONE)
     assert jst_today() == now_jst.date()
     assert jst_today() == datetime.date(2026, 9, 11) or jst_today() >= datetime.date(2026, 9, 11)
+
+
+# --- PR #14 レビュー M-3: テスト補強 ---
+
+
+def _expired_bearer() -> dict:
+    """期限切れアクセストークン (exp を過去に設定) を直接生成する。"""
+    import datetime as dt
+
+    import jwt as jwt_mod
+
+    from app.config import SECRET_KEY
+    from app.tokens import ALGORITHM
+
+    payload = {
+        "user_id": 1001,
+        "group_id": 3,
+        "admin": True,
+        "type": "access",
+        "exp": dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1),
+    }
+    return {"Authorization": "Bearer " + jwt_mod.encode(payload, SECRET_KEY, algorithm=ALGORITHM)}
+
+
+# M-3-1. 未認証 (トークン無し) → 401
+def test_milestone_events_unauthorized_without_token(client):
+    assert client.get("/milestone/1/events").status_code == 401
+    assert client.get("/milestone/closed/1/events").status_code == 401
+
+
+# M-3-1b. 期限切れトークン → 401
+def test_milestone_events_unauthorized_with_expired_token(client):
+    assert client.get("/milestone/1/events", headers=_expired_bearer()).status_code == 401
+    assert client.get("/milestone/closed/1/events", headers=_expired_bearer()).status_code == 401
+
+
+# M-3-2. 非 admin + 存在しない ID → 403 が優先 (admin 判定を先に行う契約)
+def test_non_admin_missing_milestone_returns_403(client):
+    assert client.get("/milestone/999/events", headers=_bearer(False)).status_code == 403
+    assert client.get("/milestone/closed/999/events", headers=_bearer(False)).status_code == 403
+
+
+# M-3-3. 他マイルストーンのイベントが混入しない (milestone_id 絞り込み)
+def test_milestone_events_excludes_other_milestones_events(client):
+    ms1 = _add(client, "M1").json()
+    ms2 = _add(client, "M2").json()
+    ev1 = _add_event(client, milestone_id=ms1["id"])
+    ev2 = _add_event(client, milestone_id=ms2["id"])
+    assert ev1.status_code == 201
+    assert ev2.status_code == 201
+
+    r1 = client.get(f"/milestone/{ms1['id']}/events", headers=_bearer(True))
+    assert r1.status_code == 200
+    assert [e["id"] for e in r1.json()] == [ev1.json()["id"]]
+
+    r2 = client.get(f"/milestone/{ms2['id']}/events", headers=_bearer(True))
+    assert r2.status_code == 200
+    assert [e["id"] for e in r2.json()] == [ev2.json()["id"]]
+
+
+# M-3-4. 自動 closed 後に /milestone/closed/{id}/events が 200 を返す (spec §5)
+def test_closed_events_after_auto_close(client, db_session_factory):
+    ms_id = _make_waiting(client, "M1", "2026-09-07")
+    _set_accomplished_directly(db_session_factory, ms_id, TODAY - datetime.timedelta(days=6))
+    assert close_expired_waiting_milestones(db_session_factory(), TODAY) == 1
+    assert _status_of(db_session_factory, ms_id) == MILESTONE_CLOSED
+
+    response = client.get(f"/milestone/closed/{ms_id}/events", headers=_bearer(True))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# M-3-5. closed 後に子イベントの milestone_id を外す (remove 相当) → 一覧に出ない
+def test_closed_events_excludes_detached_child(client):
+    ms_id = _add(client, "M1").json()["id"]
+    ev = _add_event(client, milestone_id=ms_id)
+    assert ev.status_code == 201
+    ev_id = ev.json()["id"]
+    assert client.delete(f"/milestone/remove/{ms_id}", headers=_bearer(True)).status_code == 200
+
+    # /event/update で明示 null を送り所属なしにする
+    detached = client.post(
+        f"/event/update/{ev_id}",
+        json={"milestone_id": None},
+        headers=_bearer(True),
+    )
+    assert detached.status_code == 200
+    assert detached.json()["milestone_id"] is None
+
+    response = client.get(f"/milestone/closed/{ms_id}/events", headers=_bearer(True))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# M-3-6. to_dict() の全 10 キーと日時フォーマット (%Y-%m-%dT%H:%M:%S.000Z) を検証
+def test_milestone_events_response_keys_and_format(client):
+    ms_id = _add(client, "M1").json()["id"]
+    _add_event(
+        client,
+        milestone_id=ms_id,
+        summary="sum",
+        progress="50%",
+    )
+
+    events = client.get(f"/milestone/{ms_id}/events", headers=_bearer(True)).json()
+    assert len(events) == 1
+    event = events[0]
+    assert set(event.keys()) == {
+        "id",
+        "staff_id",
+        "group",
+        "start",
+        "end",
+        "title",
+        "summary",
+        "progress",
+        "milestone_id",
+        "completed",
+    }
+    for key in ("start", "end"):
+        assert event[key] == "2026-08-02T10:00:00.000Z" or event[key].endswith(
+            ".000Z"
+        ), event[key]
+        datetime.datetime.strptime(event[key], "%Y-%m-%dT%H:%M:%S.000Z")
+
+
+# M-3-7. closed 側でイベント 0 件 → 空配列 200
+def test_closed_milestone_events_returns_empty_list(client):
+    ms_id = _add(client, "M1").json()["id"]
+    assert client.delete(f"/milestone/remove/{ms_id}", headers=_bearer(True)).status_code == 200
+
+    response = client.get(f"/milestone/closed/{ms_id}/events", headers=_bearer(True))
+    assert response.status_code == 200
+    assert response.json() == []
