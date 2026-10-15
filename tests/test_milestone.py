@@ -125,9 +125,13 @@ def test_milestone_events_returns_events_across_groups(client, db_session_factor
 
     assert response.status_code == 200
     events = response.json()
-    assert {event["id"] for event in events} == {first.json()["id"], second.json()["id"]}
+    by_id = {event["id"]: event for event in events}
+    assert set(by_id) == {first.json()["id"], second.json()["id"]}
     assert {event["group"] for event in events} == {3, 4}
     assert all(event["milestone_id"] == milestone_id for event in events)
+    # Issue #40: group_id -> group_name が付与される（conftest の Team(3)/Team(4)）
+    assert by_id[first.json()["id"]]["group_name"] == "SHORT_A"
+    assert by_id[second.json()["id"]]["group_name"] == "SHORT_B"
 
 
 def test_milestone_events_returns_empty_list_for_no_events(client):
@@ -161,15 +165,19 @@ def test_milestone_events_allows_waiting_milestones(client):
     assert [row["id"] for row in response.json()] == [event.json()["id"]]
 
 
-def test_milestone_events_forbidden_for_non_admin(client):
+def test_milestone_events_allowed_for_non_admin(client):
+    # Issue #40: 一般ユーザー（非 admin）でも open/waiting マイルストーンの所属イベントは閲覧可。
     milestone_id = _add(client, "M1").json()["id"]
+    ev = _add_event(client, milestone_id=milestone_id)
+    assert ev.status_code == 201
 
     response = client.get(
         f"/milestone/{milestone_id}/events",
         headers=_bearer(False),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [ev.json()["id"]]
 
 
 def test_milestone_events_returns_404_for_missing_milestone(client):
@@ -690,9 +698,11 @@ def test_milestone_events_unauthorized_with_expired_token(client):
     assert client.get("/milestone/closed/1/events", headers=_expired_bearer()).status_code == 401
 
 
-# M-3-2. 非 admin + 存在しない ID → 403 が優先 (admin 判定を先に行う契約)
-def test_non_admin_missing_milestone_returns_403(client):
-    assert client.get("/milestone/999/events", headers=_bearer(False)).status_code == 403
+# M-3-2. 非 admin + 存在しない ID:
+#   - open/waiting 用 `/milestone/{id}/events` は権限緩和（Issue #40）→ 非 admin でも 404 が優先
+#   - closed 用 `/milestone/closed/{id}/events` は admin のまま → 非 admin は 403 が優先
+def test_non_admin_missing_milestone_returns_404_vs_403(client):
+    assert client.get("/milestone/999/events", headers=_bearer(False)).status_code == 404
     assert client.get("/milestone/closed/999/events", headers=_bearer(False)).status_code == 403
 
 
@@ -748,7 +758,7 @@ def test_closed_events_excludes_detached_child(client):
     assert response.json() == []
 
 
-# M-3-6. to_dict() の全 10 キーと日時フォーマット (%Y-%m-%dT%H:%M:%S.000Z) を検証
+# M-3-6. to_dict() の全 11 キー（+ group_name）と日時フォーマット (%Y-%m-%dT%H:%M:%S.000Z) を検証
 def test_milestone_events_response_keys_and_format(client):
     ms_id = _add(client, "M1").json()["id"]
     _add_event(
@@ -765,6 +775,7 @@ def test_milestone_events_response_keys_and_format(client):
         "id",
         "staff_id",
         "group",
+        "group_name",   # Issue #40 で追加
         "start",
         "end",
         "title",
@@ -773,6 +784,7 @@ def test_milestone_events_response_keys_and_format(client):
         "milestone_id",
         "completed",
     }
+    assert event["group_name"] == "SHORT_A"  # conftest の Team(3)
     for key in ("start", "end"):
         assert event[key] == "2026-08-02T10:00:00.000Z" or event[key].endswith(
             ".000Z"

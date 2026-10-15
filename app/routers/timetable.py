@@ -305,7 +305,14 @@ def _get_milestone_events(db: Session, milestone_id: int, statuses: list[str]) -
     if milestone is None:
         raise HTTPException(status_code=404, detail="milestone not found")
     events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
-    return [event.to_dict() for event in events]
+    result = []
+    for ev in events:
+        d = ev.to_dict()
+        # Issue #40: group_id -> group_name はフロントで解決不可のため、ここで Team から付与する。
+        team = db.get(Team, d["group"])
+        d["group_name"] = team.SHORTNAME if team else None
+        result.append(d)
+    return result
 
 
 @router.get("/milestone/{milestone_id}/events")
@@ -314,8 +321,8 @@ def get_milestone_events(
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
-    if not claims.get("admin"):
-        raise HTTPException(status_code=403, detail="admin only")
+    # Issue #40: open + waiting マイルストーンの所属イベント一覧は一般ユーザー（非 admin）も閲覧可。
+    # （マイルストーンはグループ横断共有。イベントの編集は従来の権限に従う）
     return _get_milestone_events(
         db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING]
     )
