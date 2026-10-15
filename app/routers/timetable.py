@@ -291,6 +291,23 @@ def get_open_milestones(
     return [m.to_dict() for m in rows]
 
 
+def _get_milestone_events(db: Session, milestone_id: int, statuses: list[str]) -> list[dict]:
+    """milestone 取得 (404 判定) + 所属イベント取得の共通処理。
+
+    対象状態以外・存在しない ID はどちらも 404 で統一 (spec §4)。
+    milestone はグループ横断共有のため、イベントも全グループから取得する。
+    """
+    milestone = (
+        db.query(MilestoneORM)
+        .filter(MilestoneORM.id == milestone_id, MilestoneORM.status.in_(statuses))
+        .first()
+    )
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="milestone not found")
+    events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    return [event.to_dict() for event in events]
+
+
 @router.get("/milestone/{milestone_id}/events")
 def get_milestone_events(
     milestone_id: int,
@@ -299,18 +316,9 @@ def get_milestone_events(
 ):
     if not claims.get("admin"):
         raise HTTPException(status_code=403, detail="admin only")
-    milestone = (
-        db.query(MilestoneORM)
-        .filter(
-            MilestoneORM.id == milestone_id,
-            MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]),
-        )
-        .first()
+    return _get_milestone_events(
+        db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING]
     )
-    if milestone is None:
-        raise HTTPException(status_code=404, detail="milestone not found")
-    events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
-    return [event.to_dict() for event in events]
 
 
 @router.get("/milestone/closed/{milestone_id}/events")
@@ -321,18 +329,7 @@ def get_closed_milestone_events(
 ):
     if not claims.get("admin"):
         raise HTTPException(status_code=403, detail="admin only")
-    milestone = (
-        db.query(MilestoneORM)
-        .filter(
-            MilestoneORM.id == milestone_id,
-            MilestoneORM.status == MILESTONE_CLOSED,
-        )
-        .first()
-    )
-    if milestone is None:
-        raise HTTPException(status_code=404, detail="closed milestone not found")
-    events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
-    return [event.to_dict() for event in events]
+    return _get_milestone_events(db, milestone_id, [MILESTONE_CLOSED])
 
 
 @router.post("/milestone/update/{milestone_id}")

@@ -68,7 +68,7 @@ def _bearer_token(request: Request) -> str | None:
 def get_token_claims(request: Request, expected_type: str | set[str]) -> dict:
     """アクセス検証用 claims を返す。
 
-    Authorization: Bearer *** ヘッダーを優先し、無ければ httpOnly Cookie で受ける。
+    Authorization: Bearer <token> ヘッダーを優先し、無ければ httpOnly Cookie で受ける。
     どちらも無効/欠如なら 401。expected_type は単一の type 文字列か、許可する type の
     集合で渡す (/refresh では旧契約のアクセストークンとリフレッシュトークンの両方を受理するため
     {"access", "refresh"} を渡す)。
@@ -85,14 +85,14 @@ def get_token_claims(request: Request, expected_type: str | set[str]) -> dict:
     if not token:
         print("No token found")
         raise HTTPException(status_code=401, detail="missing token")
-    
+
     claims = decode_token(token)
     print(f"Decoded claims: {claims}")
-    
+
     if claims.get("type") not in allowed:
         print(f"Wrong token type: {claims.get('type')}, expected: {allowed}")
         raise HTTPException(status_code=401, detail="wrong token type")
-    
+
     print("Token validated successfully")
     return claims
 
