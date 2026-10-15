@@ -15,7 +15,7 @@ from app.jobs.close_milestones import (
     close_expired_waiting_milestones,
     jst_today,
 )
-from app.models import MILESTONE_CLOSED, MILESTONE_OPEN, MILESTONE_WAITING, MilestoneORM
+from app.models import MILESTONE_CLOSED, MILESTONE_OPEN, MILESTONE_WAITING, MilestoneORM, Team
 from app.routers.timetable import MILESTONE_COLORS
 
 
@@ -101,6 +101,177 @@ def test_milestone_all_includes_waiting(client):
     assert by_title["M1"] == "open"
     assert by_title["M2"] == "waiting"
     assert ms1["id"] in [r["id"] for r in rows]
+
+
+def test_milestone_events_returns_events_across_groups(client, db_session_factory):
+    db = db_session_factory()
+    team = Team(4)
+    team.NAME = "Team B"
+    team.SHORTNAME = "SHORT_B"
+    db.add(team)
+    db.commit()
+    db.close()
+
+    milestone_id = _add(client, "M1").json()["id"]
+    first = _add_event(client, milestone_id=milestone_id)
+    second = _add_event(client, milestone_id=milestone_id, group=4)
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 200
+    events = response.json()
+    assert {event["id"] for event in events} == {first.json()["id"], second.json()["id"]}
+    assert {event["group"] for event in events} == {3, 4}
+    assert all(event["milestone_id"] == milestone_id for event in events)
+
+
+def test_milestone_events_returns_empty_list_for_no_events(client):
+    milestone_id = _add(client, "M1").json()["id"]
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_milestone_events_allows_waiting_milestones(client):
+    milestone_id = _add(client, "M1").json()["id"]
+    updated = client.post(
+        f"/milestone/update/{milestone_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+    assert updated.json()["status"] == "waiting"
+    event = _add_event(client, milestone_id=milestone_id)
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [event.json()["id"]]
+
+
+def test_milestone_events_forbidden_for_non_admin(client):
+    milestone_id = _add(client, "M1").json()["id"]
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(False),
+    )
+
+    assert response.status_code == 403
+
+
+def test_milestone_events_returns_404_for_missing_milestone(client):
+    response = client.get("/milestone/999/events", headers=_bearer(True))
+
+    assert response.status_code == 404
+
+
+def test_milestone_events_returns_404_for_closed_milestone(client):
+    milestone_id = _add(client, "M1").json()["id"]
+    closed = client.delete(
+        f"/milestone/remove/{milestone_id}",
+        headers=_bearer(True),
+    )
+    assert closed.status_code == 200
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 404
+
+
+def test_closed_milestone_events_returns_events_across_groups(client, db_session_factory):
+    db = db_session_factory()
+    team = Team(4)
+    team.NAME = "Team B"
+    team.SHORTNAME = "SHORT_B"
+    db.add(team)
+    db.commit()
+    db.close()
+
+    milestone_id = _add(client, "M1").json()["id"]
+    first = _add_event(client, milestone_id=milestone_id)
+    second = _add_event(client, milestone_id=milestone_id, group=4)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    closed = client.delete(
+        f"/milestone/remove/{milestone_id}",
+        headers=_bearer(True),
+    )
+    assert closed.status_code == 200
+
+    response = client.get(
+        f"/milestone/closed/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 200
+    events = response.json()
+    assert {event["id"] for event in events} == {first.json()["id"], second.json()["id"]}
+    assert {event["group"] for event in events} == {3, 4}
+    assert all(event["milestone_id"] == milestone_id for event in events)
+
+
+def test_closed_milestone_events_forbidden_for_non_admin(client):
+    milestone_id = _add(client, "M1").json()["id"]
+    client.delete(f"/milestone/remove/{milestone_id}", headers=_bearer(True))
+
+    response = client.get(
+        f"/milestone/closed/{milestone_id}/events",
+        headers=_bearer(False),
+    )
+
+    assert response.status_code == 403
+
+
+def test_closed_milestone_events_returns_404_for_open_milestone(client):
+    milestone_id = _add(client, "M1").json()["id"]
+
+    response = client.get(
+        f"/milestone/closed/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 404
+
+
+def test_closed_milestone_events_returns_404_for_waiting_milestone(client):
+    milestone_id = _add(client, "M1").json()["id"]
+    client.post(
+        f"/milestone/update/{milestone_id}",
+        json={"accomplished_date": "2026-08-20"},
+        headers=_bearer(True),
+    )
+
+    response = client.get(
+        f"/milestone/closed/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 404
+
+
+def test_closed_milestone_events_returns_404_for_missing_milestone(client):
+    response = client.get(
+        "/milestone/closed/999/events",
+        headers=_bearer(True),
+    )
+
+    assert response.status_code == 404
 
 
 # 4. 追加(非 admin) → 403

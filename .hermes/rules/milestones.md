@@ -35,6 +35,10 @@
 - `admin=True` のユーザー全員が作成/クローズ/削除可能
 - 従来の「そのグループの管理者」→ 誤解を招く表現。実態は「全 admin ユーザー」
 - 閲覧はグループ単位(既存のトークン `group_id` でフィルタ)
+- `GET /milestone/{milestone_id}/events` は admin のみ参照可能。対象 milestone はグループ横断共有のため、
+  所属イベントも全グループから取得し、トークンの `group_id` では絞り込まない。
+- `GET /milestone/closed/{milestone_id}/events` も admin のみ。closed milestone のイベントを全グループから取得し、
+  open / waiting 用 endpoint と同じイベント形式で返す。
 
 ## Color rules
 - 10 固定パターン: ` #9c27b0 #009688 #795548 #607d8b #e91e63 #3f51b5 #00bcd4 #ff5722 #8bc34a #ff9800`
@@ -44,6 +48,8 @@
 ## API endpoints
 - `POST /milestone/add` — admin のみ、カラータブルから衝突回避
 - `GET /milestone/all` — open + waiting 一覧(`status.in_(["open", "waiting"])` の完全一致。旧 boolean 由来の未知ステータス値を公開しない。Issue #9 で変更多)
+- `GET /milestone/{milestone_id}/events` — admin のみ。open / waiting milestone の所属イベントを全グループから `EventORM.to_dict()` 形式で返す。存在しない ID と closed / 対象外状態の ID は 404。
+- `GET /milestone/closed/{milestone_id}/events` — admin のみ。closed milestone の所属イベントを全グループから `EventORM.to_dict()` 形式で返す。存在しない ID または closed 以外の状態は 404。
 - `POST /milestone/update/{id}` — admin のみ・部分更新(`title?` / `description?` / `guideline_end_date?` / `accomplished_date?`)。編集フィールドは None 以外を反映し status 不変。`accomplished_date` 値あり → `waiting` + 子 completed=True、明示 `null` → re-open(`open`)
 - `DELETE /milestone/remove/{id}` — admin のみ、削除でなく `status=closed`(子 completed=True)を返す `{"closed": id}`
 - 自動 closed (Task-11, 2026-09-08 実装): `waiting` のマイルストーンは猶予期間(グレース)経過後、

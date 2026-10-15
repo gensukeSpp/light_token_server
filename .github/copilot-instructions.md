@@ -1,123 +1,63 @@
-# Copilot instructions — light-token-server
+# Copilot instructions for light-token-server
 
 ## Build, test, and lint commands
 
-The project targets Python 3.13 and uses `uv`. The virtual environment is not
-activated automatically:
+This repo targets Python 3.13 and uses `uv`.
 
 ```bash
 source .venv/bin/activate
 ```
 
-Run the full test suite:
+Run the full suite:
 
 ```bash
 source .venv/bin/activate && uv run pytest
 ```
 
-Run one test module or one test:
+Run one test module or one specific test:
 
 ```bash
 source .venv/bin/activate && uv run pytest tests/test_milestone.py
 source .venv/bin/activate && uv run pytest tests/test_login.py::test_login_success_sets_session
 ```
 
-Run the development server:
+Run the dev server:
 
 ```bash
 source .venv/bin/activate && uvicorn app.main:app --reload
 ```
 
-`pyproject.toml` configures pytest to use `tests/` and adds the repository root
-to `PYTHONPATH`. There is no configured project lint command or lint tool.
+`pyproject.toml` configures pytest to use `tests/` and adds the repo root to `PYTHONPATH`. There is no project-level lint command configured in this repo.
 
 ## High-level architecture
 
-- `app/main.py` creates the FastAPI app, installs `SessionMiddleware` and
-  credentialed CORS, includes the login and timetable routers, exposes
-  `/health`, and starts the optional milestone scheduler in the FastAPI
-  lifespan.
-- `app/routers/login.py` serves the Japanese HTML login flow (`/login`,
-  `/logout`, `/`) with Jinja2 templates. A successful login stores `user_id` in
-  the Starlette session. `app/security.py` implements the `login_required`
-  dependency for these session-protected pages.
-- `app/routers/timetable.py` is the JSON/API boundary for the companion
-  `time-table-to-line` app. It issues the handoff token, refreshes tokens,
-  serves group/event APIs, and owns milestone CRUD and state transitions.
-- `app/tokens.py` implements HS256 JWTs and hybrid transport. A Bearer token in
-  `Authorization` is preferred; httpOnly `access_token` and `refresh_token`
-  cookies are the fallback. `require_token` also checks that the `StaffLogin`
-  referenced by the JWT still exists.
-- `app/database_base.py` provides the SQLAlchemy engine, `SessionLocal`, `Base`,
-  and request-scoped `get_db` dependency. `app/config.py` builds the PostgreSQL
-  URL from environment variables or `DATABASE_URL` and owns token, session, and
-  scheduler settings.
-- `app/models.py` maps the legacy tables (`M_STAFFINFO`, `M_TEAM`,
-  `M_LOGININFO`, `T_TIMELINE_EVENT`) plus `M_MILESTONE`; `app/schemas.py`
-  contains Pydantic request models. The event serializer is the API compatibility
-  boundary consumed by the frontend.
-- `app/jobs/close_milestones.py` contains the pure milestone close operation and
-  the scheduler entry point. It is intentionally called outside a request, so
-  the background job opens its own SQLAlchemy session.
-- Tests use `TestClient` and override `get_db` with an in-memory SQLite engine
-  using `StaticPool` and `check_same_thread=False`. They seed user, login, team,
-  and event rows in `tests/conftest.py`; no real PostgreSQL database is needed
-  for the test suite.
+- `app/main.py` builds the FastAPI app, installs `SessionMiddleware` and credentialed CORS, includes the login and timetable routers, exposes `/health`, and starts the optional milestone scheduler in the FastAPI lifespan.
+- `app/config.py` centralizes environment-derived settings: DB URL, token/session secrets, app URL, milestone scheduler parameters, and expiry windows.
+- `app/database_base.py` defines the SQLAlchemy engine, `SessionLocal`, `Base`, and the request-scoped `get_db` dependency.
+- `app/models.py` maps the legacy tables and uppercase attribute conventions (`M_STAFFINFO`, `M_TEAM`, `M_LOGININFO`, `T_TIMELINE_EVENT`, `M_MILESTONE`) and is the compatibility layer for the frontend.
+- `app/routers/login.py` handles the Japanese HTML login flow (`/login`, `/logout`, `/`) with Jinja2 templates; successful login stores `user_id` in the Starlette session.
+- `app/routers/timetable.py` is the main JSON/API boundary for the companion `time-table-to-line` app. It issues handoff tokens, refreshes access tokens, serves group/event APIs, and owns milestone CRUD/state transitions.
+- `app/tokens.py` implements the HS256 JWT + hybrid transport pattern: prefer `Authorization: Bearer ...`, with httpOnly cookies as the fallback. `require_token` also verifies the referenced `StaffLogin` still exists.
+- `app/jobs/close_milestones.py` contains the milestone-closing business logic and is intentionally run outside a request context, so it opens its own SQLAlchemy session.
+- Tests use FastAPI `TestClient` and override `get_db` with an in-memory SQLite engine (`StaticPool`). The fixtures in `tests/conftest.py` seed user/login/team/event rows, so no real PostgreSQL is required for the default test run.
+- The repo includes an MCP configuration at `.mcp.json` with a `code-review-graph` server, and `.claude/settings.json` hooks it into editor commands.
 
 ## Key conventions
 
-- Read `AGENTS.md` and `requirement-02.md` before changing authentication or
-  database behavior. For milestone changes, read both `requirement-03.md` and
-  `.hermes/rules/milestones.md`; the latter is the frequently updated source of
-  milestone rules. For behavior changes, also inspect the newest dated file in
-  `specs/` and `docs/architecture/`.
-- Application request handlers and dependencies must receive
-  `db: Session = Depends(get_db)`; do not create `SessionLocal()` in routers or
-  request dependencies. The standalone scheduler job is the exception because
-  it runs without a request dependency.
-- Preserve legacy table names and uppercase model attributes. Do not rename or
-  reshape `EventORM.to_dict()`: its keys are `id`, `staff_id`, `group`, `start`,
-  `end`, `title`, `summary`, `progress`, `milestone_id`, and `completed`, with
-  timestamps formatted as `%Y-%m-%dT%H:%M:%S.000Z`.
-- Preserve the `time-table-to-line` token contract. `/timetable/auth` returns a
-  303 redirect to `{APP_URL}/auth?token=<access-token>` and sets both auth
-  cookies. `/refresh` accepts the existing client contract (access or refresh
-  JWT) and returns JSON containing a new `access_token` while refreshing the
-  access cookie.
-- Access JWT claims are `user_id`, `group_id`, `admin`, `type`, and `exp`.
-  Timetable and milestone APIs use `Depends(require_token)`; HTML pages use
-  `Depends(login_required)`. Keep Werkzeug
-  `generate_password_hash`/`check_password_hash` for existing password hashes.
-- Keep session cookies httpOnly and set `https_only=True` when `ENV=production`.
-  Never read, print, expose, or commit `.env` contents or credentials.
-- Use Pydantic models with `Annotated[..., Form()]` for HTML form bodies.
-  Templates use request-first `TemplateResponse(request, ...)`. Ordinary
-  redirects use `RedirectResponse(..., status_code=303)`; dependency-based
-  redirects use an HTTP 303 with a `Location` header.
-- Milestones are group-independent and use `open`, `waiting`, and `closed`.
-  Admin claims are required for create/update/remove; `/milestone/remove` is a
-  soft close. Setting `accomplished_date` moves a milestone to `waiting` and
-  marks child events completed; explicitly sending `accomplished_date: null`
-  reopens it and resets those child events to incomplete. Closed milestones
-  cannot be updated.
-- Milestone colors come from the fixed palette in
-  `app/routers/timetable.py`; colors used by `open` or `waiting` milestones are
-  avoided before cycling. The frontend relies on `#2196f3` for the default event
-  color and `#ffc107` for the clicked color.
-- The APScheduler job closes `waiting` milestones after
-  `MILESTONE_CLOSE_GRACE_DAYS` (default 5), using the inclusive
-  `accomplished_date + grace_days <= today` boundary. Its interval is controlled
-  by `MILESTONE_CLOSE_INTERVAL_MINUTES`; set
-  `ENABLE_MILESTONE_SCHEDULER=false` for development/tests when needed.
-- Do not run Alembic migrations automatically. PostgreSQL migration execution is
-  intentionally manual. Do not reintroduce the removed Flask modules
-  (`routes.py`, `auth_middleware.py`) or Flask imports.
-- UI copy is Japanese and templates are plain HTML/htmx-oriented, not
-  Bootstrap-based.
+- Read `AGENTS.md` and `requirement-02.md` before changing authentication or database behavior. For milestone changes, read both `requirement-03.md` and `.hermes/rules/milestones.md`; if a behavior change touches a larger feature, also check the newest dated file in `specs/` and `docs/architecture/`.
+- Request handlers and dependencies should receive `db: Session = Depends(get_db)`. Do not open `SessionLocal()` inside request handlers or request-scoped dependencies; the scheduler job is the exception because it runs without a request dependency.
+- Keep the legacy schema conventions intact: preserve table names, uppercase model attributes, and the `EventORM.to_dict()` contract. Its keys are `id`, `staff_id`, `group`, `start`, `end`, `title`, `summary`, `progress`, `milestone_id`, and `completed`, with timestamps formatted as `%Y-%m-%dT%H:%M:%S.000Z`.
+- Preserve the `time-table-to-line` token contract: `/timetable/auth` redirects to `{APP_URL}/auth?token=<access-token>` and sets both auth cookies, while `/refresh` accepts the existing client contract (access or refresh JWT) and returns a new `access_token` plus refreshed cookie state.
+- Access JWT claims are `user_id`, `group_id`, `admin`, `type`, and `exp`. Timetable and milestone APIs use `Depends(require_token)`; HTML pages use `Depends(login_required)`.
+- Keep session cookies `httpOnly`; set `https_only=True` when `ENV=production`. Do not expose, print, or commit `.env` content or secrets.
+- Use Pydantic models with `Annotated[..., Form()]` for HTML form bodies, and use `TemplateResponse(request, ...)` for page responses. Redirects should follow the repo's normal patterns: 303 redirects for normal handoff flows and `HTTPException(303, headers={"Location": ...})` in dependencies.
+- Keep milestone behavior aligned with the repo rules: statuses are `open`, `waiting`, and `closed`; admin-only writes are expected for milestone create/update/remove; `/milestone/remove` is a soft close; setting `accomplished_date` triggers the waiting/complete transition, and closing a milestone cannot be reopened.
+- Follow the configured milestone color palette and scheduler semantics in `app/routers/timetable.py` and `app/jobs/close_milestones.py` rather than inventing custom milestone rules.
+- Do not run Alembic migrations automatically; PostgreSQL migration execution is intentionally manual. Do not reintroduce the removed Flask modules (`routes.py`, `auth_middleware.py`) or Flask imports.
+- UI copy is Japanese, and templates are plain HTML/htmx-oriented rather than Bootstrap-based.
 
-## Repository guidance and review workflow
+## Working style notes
 
-`AGENTS.md` and `GEMINI.md` provide the repository-wide context. The
-`.github/agents/pr-review.md` agent requires checking the relevant issue,
-newest dated spec, newest dated architecture document, PR/diff, and recording
-Japanese review results under `.github/reports/` without modifying source code.
+- Prefer surgical, repo-aligned edits over broad refactors.
+- For auth and database changes, validate against the existing tests and the repo's requirements rather than introducing a new pattern.
+- If a task affects milestone logic, read the milestone requirements and the scheduler logic together to keep behavior consistent.

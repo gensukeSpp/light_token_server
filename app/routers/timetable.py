@@ -291,6 +291,50 @@ def get_open_milestones(
     return [m.to_dict() for m in rows]
 
 
+@router.get("/milestone/{milestone_id}/events")
+def get_milestone_events(
+    milestone_id: int,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    milestone = (
+        db.query(MilestoneORM)
+        .filter(
+            MilestoneORM.id == milestone_id,
+            MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]),
+        )
+        .first()
+    )
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="milestone not found")
+    events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    return [event.to_dict() for event in events]
+
+
+@router.get("/milestone/closed/{milestone_id}/events")
+def get_closed_milestone_events(
+    milestone_id: int,
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    milestone = (
+        db.query(MilestoneORM)
+        .filter(
+            MilestoneORM.id == milestone_id,
+            MilestoneORM.status == MILESTONE_CLOSED,
+        )
+        .first()
+    )
+    if milestone is None:
+        raise HTTPException(status_code=404, detail="closed milestone not found")
+    events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    return [event.to_dict() for event in events]
+
+
 @router.post("/milestone/update/{milestone_id}")
 def update_milestone(
     milestone_id: int,
