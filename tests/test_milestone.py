@@ -229,9 +229,13 @@ def test_closed_milestone_events_returns_events_across_groups(client, db_session
 
     assert response.status_code == 200
     events = response.json()
-    assert {event["id"] for event in events} == {first.json()["id"], second.json()["id"]}
+    by_id = {event["id"]: event for event in events}
+    assert set(by_id) == {first.json()["id"], second.json()["id"]}
     assert {event["group"] for event in events} == {3, 4}
     assert all(event["milestone_id"] == milestone_id for event in events)
+    # Issue #40: closed 側でも group_name が付与される（spec §2.1）
+    assert by_id[first.json()["id"]]["group_name"] == "SHORT_A"
+    assert by_id[second.json()["id"]]["group_name"] == "SHORT_B"
 
 
 def test_closed_milestone_events_forbidden_for_non_admin(client):
@@ -775,7 +779,7 @@ def test_milestone_events_response_keys_and_format(client):
         "id",
         "staff_id",
         "group",
-        "group_name",   # Issue #40 で追加
+        "group_name",  # Issue #40 で追加
         "start",
         "end",
         "title",
@@ -786,9 +790,7 @@ def test_milestone_events_response_keys_and_format(client):
     }
     assert event["group_name"] == "SHORT_A"  # conftest の Team(3)
     for key in ("start", "end"):
-        assert event[key] == "2026-08-02T10:00:00.000Z" or event[key].endswith(
-            ".000Z"
-        ), event[key]
+        assert event[key] == "2026-08-02T10:00:00.000Z" or event[key].endswith(".000Z"), event[key]
         datetime.datetime.strptime(event[key], "%Y-%m-%dT%H:%M:%S.000Z")
 
 
@@ -800,3 +802,20 @@ def test_closed_milestone_events_returns_empty_list(client):
     response = client.get(f"/milestone/closed/{ms_id}/events", headers=_bearer(True))
     assert response.status_code == 200
     assert response.json() == []
+
+
+# 指摘 4: Team 未登録（存在しない group）のイベント → group_name は null
+def test_milestone_events_group_name_none_when_team_unregistered(client):
+    milestone_id = _add(client, "M1").json()["id"]
+    # conftest では Team(3) のみ登録。存在しない group=999 のイベントを作成。
+    ev = _add_event(client, milestone_id=milestone_id, group=999)
+    assert ev.status_code == 201
+
+    response = client.get(
+        f"/milestone/{milestone_id}/events",
+        headers=_bearer(True),
+    )
+    assert response.status_code == 200
+    events = response.json()
+    assert len(events) == 1
+    assert events[0]["group_name"] is None

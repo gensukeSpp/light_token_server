@@ -1,6 +1,8 @@
 # マイルストーン所属イベント取得 API 仕様
 
-> **改訂（2026-10-15, Issue #40）:** open/waiting 用 `GET /milestone/{milestone_id}/events` の閲覧を**一般ユーザー（非 admin）も可**に緩和し、レスポンスに **`group_name` を追加**した。closed 用 `GET /milestone/closed/{milestone_id}/events` は**管理者限定のまま**。本改訂により下記「参照権限は管理者に限る」は open/waiting 用には適用されない（§2 / §4 参照）。フロント側仕様は `time-table-to-line/specs/2026-10-15-spec.md`。
+> **本ファイルは現行契約の正本です。** open/waiting 用 `GET /milestone/{milestone_id}/events` は一般ユーザー（非 admin 含む）が閲覧可（`require_token` のみ）、closed 用 `GET /milestone/closed/{milestone_id}/events` は管理者限定です。Issue #40 / PR #15 による差分の記録は `2026-10-15-milestone-events-group-name-auth-spec.md` を参照してください。
+> 変更理由・動機・テスト変更などの詳細は、差分記録 `2026-10-15-milestone-events-group-name-auth-spec.md` を参照。
+> フロント側仕様は `time-table-to-line/specs/2026-10-15-spec.md`。
 
 ## 1. 目的
 

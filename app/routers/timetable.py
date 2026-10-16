@@ -38,8 +38,16 @@ router = APIRouter()
 # マイルストーン用 10 固定カラーパレット (AGENTS.md / requirement-03.md)。
 # 一覧に表示中 (open + waiting) のマイルストーンと被らない色を _next_color が順に選ぶ。
 MILESTONE_COLORS = [
-    "#9c27b0", "#009688", "#795548", "#607d8b", "#e91e63",
-    "#3f51b5", "#00bcd4", "#ff5722", "#8bc34a", "#ff9800",
+    "#9c27b0",
+    "#009688",
+    "#795548",
+    "#607d8b",
+    "#e91e63",
+    "#3f51b5",
+    "#00bcd4",
+    "#ff5722",
+    "#8bc34a",
+    "#ff9800",
 ]
 
 
@@ -49,9 +57,7 @@ def _next_color(db: Session) -> str:
     """
     used = {
         m.color
-        for m in db.query(MilestoneORM)
-        .filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]))
-        .all()
+        for m in db.query(MilestoneORM).filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING])).all()
     }
     for c in MILESTONE_COLORS:
         if c not in used:
@@ -253,6 +259,7 @@ def remove_event_item(
 # admin=True の全ユーザーが作成 / close / 削除を実行できる。閲覧は require_token のみ。
 # グループ横断共有のため group_id フィルタはしない。
 
+
 @router.post("/milestone/add", status_code=201)
 def add_milestone(
     body: MilestoneCreate,
@@ -283,11 +290,7 @@ def get_open_milestones(
 ):
     # Issue #9: open + waiting を返す (closed を除く)。waiting の猶予期間中一覧表示に対応。
     # status.in_ で完全一致にする: 旧 boolean 由来の未知のステータス値を公開一覧へ流さない。
-    rows = (
-        db.query(MilestoneORM)
-        .filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING]))
-        .all()
-    )
+    rows = db.query(MilestoneORM).filter(MilestoneORM.status.in_([MILESTONE_OPEN, MILESTONE_WAITING])).all()
     return [m.to_dict() for m in rows]
 
 
@@ -298,19 +301,19 @@ def _get_milestone_events(db: Session, milestone_id: int, statuses: list[str]) -
     milestone はグループ横断共有のため、イベントも全グループから取得する。
     """
     milestone = (
-        db.query(MilestoneORM)
-        .filter(MilestoneORM.id == milestone_id, MilestoneORM.status.in_(statuses))
-        .first()
+        db.query(MilestoneORM).filter(MilestoneORM.id == milestone_id, MilestoneORM.status.in_(statuses)).first()
     )
     if milestone is None:
         raise HTTPException(status_code=404, detail="milestone not found")
     events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    # N+1 対策: イベント件数ぶん db.get(Team, ...) を発行しないよう、チームを一括取得して dict にまとめる (spec §8 / PR #15 review 指摘 8)。
+    group_ids = {d["group"] for d in (ev.to_dict() for ev in events)}
+    teams = (db.query(Team).filter(Team.CODE.in_(group_ids)).all()) if group_ids else []
+    team_name_by_code = {t.CODE: t.SHORTNAME for t in teams}
     result = []
     for ev in events:
         d = ev.to_dict()
-        # Issue #40: group_id -> group_name はフロントで解決不可のため、ここで Team から付与する。
-        team = db.get(Team, d["group"])
-        d["group_name"] = team.SHORTNAME if team else None
+        d["group_name"] = team_name_by_code.get(d["group"])
         result.append(d)
     return result
 
@@ -323,9 +326,7 @@ def get_milestone_events(
 ):
     # Issue #40: open + waiting マイルストーンの所属イベント一覧は一般ユーザー（非 admin）も閲覧可。
     # （マイルストーンはグループ横断共有。イベントの編集は従来の権限に従う）
-    return _get_milestone_events(
-        db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING]
-    )
+    return _get_milestone_events(db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING])
 
 
 @router.get("/milestone/closed/{milestone_id}/events")
@@ -369,18 +370,14 @@ def update_milestone(
         if body.accomplished_date is not None:
             target.accomplished_date = body.accomplished_date
             target.status = MILESTONE_WAITING
-            for ev in db.query(EventORM).filter(
-                EventORM.milestone_id == milestone_id
-            ).all():
+            for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
                 ev.completed = True
         else:
             # re-open: waiting の再 open。accomplished_date を None に戻し、
             # waiting 遷移時に一括 True にした子イベント completed を False に戻す(配色復帰)。
             target.status = MILESTONE_OPEN
             target.accomplished_date = None
-            for ev in db.query(EventORM).filter(
-                EventORM.milestone_id == milestone_id
-            ).all():
+            for ev in db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all():
                 ev.completed = False
 
     db.commit()

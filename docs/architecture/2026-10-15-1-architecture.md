@@ -1,5 +1,8 @@
 # アーキテクチャスナップショット: 2026-10-15
 
+> ※ 注意: 本ファイルは同日付の `docs/architecture/2026-10-15-2-architecture.md` により置換された
+> （Issue `time-table-to-line#40` で open/waiting 用 GET の認可を緩和）。認可については 2 の記載が現行の正とする。
+
 ## 目的 (Purpose)
 マイルストーンから所属するイベントを状態別（open/waiting と closed）に参照できる API エンドポイントを追加し、管理者がグループを跨いでイベントの紐付け状況を確認できるようにする。
 
@@ -7,7 +10,7 @@
 - **新規 API エンドポイント**:
   - `GET /milestone/{milestone_id}/events`: `open` または `waiting` 状態のマイルストーンに所属する全グループのイベントを取得。
   - `GET /milestone/closed/{milestone_id}/events`: `closed` 状態のマイルストーンに所属する全グループのイベントを取得。
-- **認可制御**: いずれのエンドポイントも管理者権限 (`admin` claim) を必須とし、非管理者の場合は `403 Forbidden` を返す。
+- **認可制御**: `GET /milestone/{milestone_id}/events`（open/waiting）は有効なアクセストークンのみ（`require_token`、admin 不要）で参照可。`GET /milestone/closed/{milestone_id}/events` のみ管理者権限 (`admin` claim) を必須とし、非管理者の場合は `403 Forbidden` を返す。
 
 ## キーとなる技術的変更 (Key design decisions)
 - **グループ横断の取得**: マイルストーン自体がグループ横断で共有される仕様に合わせ、紐づくイベントも特定のグループに限定せず全グループから取得する設計を採用。
