@@ -306,16 +306,15 @@ def _get_milestone_events(db: Session, milestone_id: int, statuses: list[str]) -
     if milestone is None:
         raise HTTPException(status_code=404, detail="milestone not found")
     events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    # Issue #16 [低-6]: 1 イベントにつき dict 生成は 1 回だけ
+    rows = [ev.to_milestone_dict() for ev in events]
     # N+1 対策: イベント件数ぶん db.get(Team, ...) を発行しないよう、チームを一括取得して dict にまとめる (spec §8 / PR #15 review 指摘 8)。
-    group_ids = {d["group"] for d in (ev.to_dict() for ev in events)}
+    group_ids = {d["group"] for d in rows}
     teams = (db.query(Team).filter(Team.CODE.in_(group_ids)).all()) if group_ids else []
     team_name_by_code = {t.CODE: t.SHORTNAME for t in teams}
-    result = []
-    for ev in events:
-        d = ev.to_dict()
+    for d in rows:
         d["group_name"] = team_name_by_code.get(d["group"])
-        result.append(d)
-    return result
+    return rows
 
 
 @router.get("/milestone/{milestone_id}/events")

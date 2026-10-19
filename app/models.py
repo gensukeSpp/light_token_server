@@ -90,6 +90,10 @@ class StaffLogin(Base):
         return check_password_hash(self.PASSWORD_HASH, PASSWORD)
 
 
+# イベント日時のシリアライズ形式（to_dict / to_milestone_dict で共有）
+_EVENT_TIME_FORMAT = "%Y-%m-%dT%H:%M:%S.000Z"
+
+
 class EventORM(Base):
     __tablename__ = "T_TIMELINE_EVENT"
 
@@ -107,7 +111,7 @@ class EventORM(Base):
     # SQLAlchemyでクラスオブジェクトを辞書型(dictionary)に変換する方法
     # https://qiita.com/hayashi-ay/items/4da431003e8d2aff8
     def to_dict(self):
-        f = "%Y-%m-%dT%H:%M:%S.000Z"
+        f = _EVENT_TIME_FORMAT
         return {
             "id": self.id,
             "staff_id": self.staff_id,
@@ -120,6 +124,24 @@ class EventORM(Base):
             "milestone_id": self.milestone_id,
             "completed": self.completed,
         }
+
+    # Issue #16 [中-1]: /milestone/*/events は非 admin も閲覧するため、
+    # 表示に必要なキーのみをホワイトリストで公開する (summary は含めない)。
+    MILESTONE_EVENT_KEYS = (
+        "id",
+        "staff_id",
+        "group",
+        "start",
+        "end",
+        "title",
+        "progress",
+        "milestone_id",
+        "completed",
+    )
+
+    def to_milestone_dict(self):
+        full = self.to_dict()
+        return {key: full[key] for key in self.MILESTONE_EVENT_KEYS}
 
 
 # マイルストーン status (requirement-03.md 2026-08-27 変更)。

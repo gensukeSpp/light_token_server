@@ -8,7 +8,7 @@
 - `YYYY-MM-DD-1-spec.md` / `YYYY-MM-DD-2-spec.md` — 同じ日に複数件ある場合の区別
 - `YYYY-MM-DD-<テーマ>-spec.md` — 特定 API / 機能の仕様書
 
-> **注意**: マイルストーン関連の仕様は時系列で改訂されており、**現行契約の正本（canonical）は `2026-10-13-milestone-event-retrieval-spec.md`** です。`2026-10-15-...` は PR #15 の**変更履歴（差分記録）**であり、エンドポイント・権限マトリクスなど現行定義の正は 10-13（正本）を参照します。作業ログ系ファイルは過去の実装記録なので、機能の現行契約を参照する場合は「最新仕様の把握方法」に従ってください。
+> **注意**: マイルストーン関連の仕様は時系列で改訂されており、**現行契約の正本（canonical）は `2026-10-13-milestone-event-retrieval-spec.md`** です。`2026-10-15-...` は PR #15 の、`2026-10-19-...` は Issue #16 の**変更履歴（差分記録）**であり、エンドポイント・権限マトリクス・レスポンスなど現行定義の正は 10-13（正本）を参照します。作業ログ系ファイルは過去の実装記録なので、機能の現行契約を参照する場合は「最新仕様の把握方法」に従ってください。
 
 ## 一覧
 
@@ -21,8 +21,9 @@
 | [2026-09-07-spec.md](./2026-09-07-spec.md) | 2026-09-07 | `update_event_item` の `milestone_id` 判定を `is not None` → `model_fields_set` に変更（明示 null で「所属なし」保存）。44 passed |
 | [2026-09-08-spec.md](./2026-09-08-spec.md) | 2026-09-08 | Task-11: マイルストーン自動 close スケジューラ（waiting → 猶予 5 日超過で自動 closed、APScheduler + BackgroundScheduler、`ENABLE_MILESTONE_SCHEDULER` で切替）。全テスト 50 件 GREEN |
 | [2026-09-11-spec.md](./2026-09-11-spec.md) | 2026-09-11 | Task-12: `update_milestone` の re-open 分岐で子イベント `completed` を False に復帰。全テスト 51 passed |
-| [2026-10-13-milestone-event-retrieval-spec.md](./2026-10-13-milestone-event-retrieval-spec.md) | 2026-10-13 | **現行契約の正本（canonical）**。マイルストーン所属イベント取得 API の完全仕様（`GET /milestone/{id}/events`＝open/waiting・非 admin 閲覧可、`GET /milestone/closed/{id}/events`＝closed・admin 限定、`group_name` 付与、レスポンス・権限マトリクス）。Issue #40 / PR #15 で改訂済み |
-| [2026-10-15-milestone-events-group-name-auth-spec.md](./2026-10-15-milestone-events-group-name-auth-spec.md) | 2026-10-15 | **PR #15 の変更履歴（差分記録）**。権限緩和（open/waiting を非 admin にも許可）と `group_name` 付与の動機・実装箇所・テスト変更・影響範囲を記録。現行定義の正は上記の正本（10-13）を参照 |
+| [2026-10-13-milestone-event-retrieval-spec.md](./2026-10-13-milestone-event-retrieval-spec.md) | 2026-10-13 | **現行契約の正本（canonical）**。マイルストーン所属イベント取得 API の完全仕様（`GET /milestone/{id}/events`＝open/waiting・非 admin 閲覧可、`GET /milestone/closed/{id}/events`＝closed・admin 限定、`group_name` 付与、レスポンス・権限マトリクス）。Issue #40 / PR #15・Issue #16 で改訂済み（`summary` は非公開） |
+| [2026-10-15-milestone-events-group-name-auth-spec.md](./2026-10-15-milestone-events-group-name-auth-spec.md) | 2026-10-15 | **PR #15 の変更履歴（差分記録）**。権限緩和（open/waiting を非 admin にも許可）と `group_name` 付与の動機・実装箇所・テスト変更・影響範囲を記録。現行定義の正は上記の正本（10-13）を参照。※記載の「11 キー」は当時（`summary` 含む）の内容。Issue #16 で 10 キーに改訂済み |
+| [2026-10-19-milestone-events-summary-exclusion-spec.md](./2026-10-19-milestone-events-summary-exclusion-spec.md) | 2026-10-19 | **Issue #16 の変更履歴（差分記録）**。マイルストーン所属イベント API のレスポンスをホワイトリスト化して `summary` を非公開化（`EventORM.MILESTONE_EVENT_KEYS` / `to_milestone_dict()`）し、`_get_milestone_events` の `to_dict()` 二重呼び出しを解消。正本（10-13）§3 も同時改訂。`test_milestone.py` 47 passed / 全体 74 passed |
 
 ## 最新仕様の把握方法
 

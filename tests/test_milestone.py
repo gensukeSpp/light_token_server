@@ -236,6 +236,8 @@ def test_closed_milestone_events_returns_events_across_groups(client, db_session
     # Issue #40: closed 側でも group_name が付与される（spec §2.1）
     assert by_id[first.json()["id"]]["group_name"] == "SHORT_A"
     assert by_id[second.json()["id"]]["group_name"] == "SHORT_B"
+    # Issue #16: closed も同じ _get_milestone_events を通るため summary は返さない
+    assert all("summary" not in event for event in events)
 
 
 def test_closed_milestone_events_forbidden_for_non_admin(client):
@@ -762,7 +764,8 @@ def test_closed_events_excludes_detached_child(client):
     assert response.json() == []
 
 
-# M-3-6. to_dict() の全 11 キー（+ group_name）と日時フォーマット (%Y-%m-%dT%H:%M:%S.000Z) を検証
+# M-3-6. 公開 9 キー（+ group_name）と日時フォーマット (%Y-%m-%dT%H:%M:%S.000Z) を検証
+# Issue #16 [中-1]: /milestone/{id}/events は非 admin も閲覧するため summary は返さない
 def test_milestone_events_response_keys_and_format(client):
     ms_id = _add(client, "M1").json()["id"]
     _add_event(
@@ -783,11 +786,12 @@ def test_milestone_events_response_keys_and_format(client):
         "start",
         "end",
         "title",
-        "summary",
         "progress",
         "milestone_id",
         "completed",
     }
+    # Issue #16 [中-1]: summary は非 admin に露出させない
+    assert "summary" not in event
     assert event["group_name"] == "SHORT_A"  # conftest の Team(3)
     for key in ("start", "end"):
         assert event[key] == "2026-08-02T10:00:00.000Z" or event[key].endswith(".000Z"), event[key]
@@ -819,3 +823,14 @@ def test_milestone_events_group_name_none_when_team_unregistered(client):
     events = response.json()
     assert len(events) == 1
     assert events[0]["group_name"] is None
+
+
+# Issue #16: /event/* は従来どおり summary を返す（to_dict は変更しない）
+def test_event_all_still_includes_summary(client):
+    created = _add_event(client, summary="visible")
+    assert created.status_code == 201
+
+    events = client.get("/event/all", headers=_bearer(True)).json()
+
+    by_id = {event["id"]: event for event in events}
+    assert by_id[created.json()["id"]]["summary"] == "visible"

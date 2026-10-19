@@ -48,8 +48,15 @@
 ## API endpoints
 - `POST /milestone/add` — admin のみ、カラータブルから衝突回避
 - `GET /milestone/all` — open + waiting 一覧(`status.in_(["open", "waiting"])` の完全一致。旧 boolean 由来の未知ステータス値を公開しない。Issue #9 で変更多)
-- `GET /milestone/{milestone_id}/events` — `require_token` のみ(admin 不要)。open / waiting milestone の所属イベントを全グループから `EventORM.to_dict()` 形式で返す。存在しない ID と closed / 対象外状態の ID は 404。
-- `GET /milestone/closed/{milestone_id}/events` — admin のみ。closed milestone の所属イベントを全グループから `EventORM.to_dict()` 形式で返す。存在しない ID または closed 以外の状態は 404。
+- `GET /milestone/{milestone_id}/events` — `require_token` のみ(admin 不要)。open / waiting milestone の所属イベントを全グループから `EventORM.to_milestone_dict()`（ホワイトリスト）形式で返す。存在しない ID と closed / 対象外状態の ID は 404。
+- `GET /milestone/closed/{milestone_id}/events` — admin のみ。closed milestone の所属イベントを全グループから `EventORM.to_milestone_dict()`（ホワイトリスト）形式で返す。存在しない ID または closed 以外の状態は 404。
+- 両 endpoint 共通のレスポンス仕様（Issue #16、2026-10-19）:
+  - 公開キーは **`id` / `staff_id` / `group` / `group_name` / `start` / `end` / `title` / `progress` / `milestone_id` / `completed`** の 10 キーのみ（`EventORM.MILESTONE_EVENT_KEYS`）。
+  - **`summary` は含めない**。open / waiting 一覧は非 admin も閲覧するため、他グループのイベント概要文を露出させない。`summary` が必要な場合は `/event/all` / `/event/user` / `/group/all`（`EventORM.to_dict()` ベース）を使う。
+  - ブラックリスト（`pop("summary")`）ではなくホワイトリスト方式。`EventORM` にカラムを追加しても既定で非公開になる（追加する場合は `MILESTONE_EVENT_KEYS` とテストを同時更新）。
+  - `group_name` は `M_TEAM.SHORTNAME`（Team 未登録なら `null`）。ルータ側で Team を一括取得して付与（N+1 回避）。
+  - 共通ヘルパ `_get_milestone_events` は 1 イベントにつき dict 生成を 1 回だけ行う（`to_dict()` の二重呼び出しをしない、Issue #16 [低-6]）。
+  - 正本仕様: `specs/2026-10-13-milestone-event-retrieval-spec.md`。差分記録: `specs/2026-10-19-milestone-events-summary-exclusion-spec.md`
 - `POST /milestone/update/{id}` — admin のみ・部分更新(`title?` / `description?` / `guideline_end_date?` / `accomplished_date?`)。編集フィールドは None 以外を反映し status 不変。`accomplished_date` 値あり → `waiting` + 子 completed=True、明示 `null` → re-open(`open`)
 - `DELETE /milestone/remove/{id}` — admin のみ、削除でなく `status=closed`(子 completed=True)を返す `{"closed": id}`
 - 自動 closed (Task-11, 2026-09-08 実装): `waiting` のマイルストーンは猶予期間(グレース)経過後、
