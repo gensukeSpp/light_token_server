@@ -834,3 +834,66 @@ def test_event_all_still_includes_summary(client):
 
     by_id = {event["id"]: event for event in events}
     assert by_id[created.json()["id"]]["summary"] == "visible"
+
+
+# --- Issue #41: 閉じたマイルストーンの一覧 ---
+
+
+def _close_directly(factory, ms_id: int, accomplished):
+    """テスト用: DB 直操作で closed + 達成日を設定する。"""
+    db = factory()
+    try:
+        ms = db.query(MilestoneORM).filter(MilestoneORM.id == ms_id).first()
+        ms.status = MILESTONE_CLOSED
+        ms.accomplished_date = accomplished
+        db.commit()
+    finally:
+        db.close()
+
+
+# 25. closed のみを達成日の降順で返す
+def test_closed_milestones_returns_closed_sorted_desc(client, db_session_factory):
+    older = _add(client, "OLD").json()["id"]
+    newer = _add(client, "NEW").json()["id"]
+    open_id = _add(client, "OPEN").json()["id"]
+    _close_directly(db_session_factory, older, datetime.date(2026, 8, 10))
+    _close_directly(db_session_factory, newer, datetime.date(2026, 8, 20))
+
+    response = client.get("/milestone/closed", headers=_bearer(True))
+
+    assert response.status_code == 200
+    rows = response.json()
+    assert [r["id"] for r in rows] == [newer, older]
+    assert all(r["status"] == "closed" for r in rows)
+    assert open_id not in [r["id"] for r in rows]
+
+
+# 26. 達成日 NULL (削除 API 由来の closed) は末尾
+def test_closed_milestones_puts_null_accomplished_last(client, db_session_factory):
+    dated = _add(client, "DATED").json()["id"]
+    removed = _add(client, "REMOVED").json()["id"]
+    _close_directly(db_session_factory, dated, datetime.date(2026, 8, 20))
+    assert client.delete(f"/milestone/remove/{removed}", headers=_bearer(True)).status_code == 200
+
+    rows = client.get("/milestone/closed", headers=_bearer(True)).json()
+
+    assert [r["id"] for r in rows] == [dated, removed]
+    assert rows[1]["accomplished_date"] is None
+
+
+# 27. open / waiting は含まない
+def test_closed_milestones_excludes_open_and_waiting(client):
+    _add(client, "OPEN")
+    waiting_id = _make_waiting(client, "WAITING", "2026-09-07")
+    assert waiting_id
+
+    rows = client.get("/milestone/closed", headers=_bearer(True)).json()
+
+    assert rows == []
+
+
+# 28. 非 admin は 403
+def test_closed_milestones_forbidden_for_non_admin(client):
+    response = client.get("/milestone/closed", headers=_bearer(False))
+
+    assert response.status_code == 403

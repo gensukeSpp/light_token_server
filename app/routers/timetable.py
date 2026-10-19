@@ -328,6 +328,29 @@ def get_milestone_events(
     return _get_milestone_events(db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING])
 
 
+@router.get("/milestone/closed")
+def get_closed_milestones(
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    """Issue #41: 閉じたマイルストーンの一覧 (管理者のみ)。
+
+    達成日 (accomplished_date) の降順。削除 API で閉じたものは達成日が NULL のため末尾へ。
+    """
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    rows = (
+        db.query(MilestoneORM)
+        .filter(MilestoneORM.status == MILESTONE_CLOSED)
+        .order_by(
+            MilestoneORM.accomplished_date.is_(None),
+            MilestoneORM.accomplished_date.desc(),
+        )
+        .all()
+    )
+    return [m.to_dict() for m in rows]
+
+
 @router.get("/milestone/closed/{milestone_id}/events")
 def get_closed_milestone_events(
     milestone_id: int,
