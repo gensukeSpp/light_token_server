@@ -8,6 +8,7 @@ alembic.ini
 logs/
 uv.lock
 .playwright-mcp/
+.claude/
 
 # TODO: release branch で解除
 # docker-compose.yml

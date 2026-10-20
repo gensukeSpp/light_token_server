@@ -306,16 +306,15 @@ def _get_milestone_events(db: Session, milestone_id: int, statuses: list[str]) -
     if milestone is None:
         raise HTTPException(status_code=404, detail="milestone not found")
     events = db.query(EventORM).filter(EventORM.milestone_id == milestone_id).all()
+    # Issue #16 [低-6]: 1 イベントにつき dict 生成は 1 回だけ
+    rows = [ev.to_milestone_dict() for ev in events]
     # N+1 対策: イベント件数ぶん db.get(Team, ...) を発行しないよう、チームを一括取得して dict にまとめる (spec §8 / PR #15 review 指摘 8)。
-    group_ids = {d["group"] for d in (ev.to_dict() for ev in events)}
+    group_ids = {d["group"] for d in rows}
     teams = (db.query(Team).filter(Team.CODE.in_(group_ids)).all()) if group_ids else []
     team_name_by_code = {t.CODE: t.SHORTNAME for t in teams}
-    result = []
-    for ev in events:
-        d = ev.to_dict()
+    for d in rows:
         d["group_name"] = team_name_by_code.get(d["group"])
-        result.append(d)
-    return result
+    return rows
 
 
 @router.get("/milestone/{milestone_id}/events")
@@ -327,6 +326,29 @@ def get_milestone_events(
     # Issue #40: open + waiting マイルストーンの所属イベント一覧は一般ユーザー（非 admin）も閲覧可。
     # （マイルストーンはグループ横断共有。イベントの編集は従来の権限に従う）
     return _get_milestone_events(db, milestone_id, [MILESTONE_OPEN, MILESTONE_WAITING])
+
+
+@router.get("/milestone/closed")
+def get_closed_milestones(
+    claims: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    """Issue #41: 閉じたマイルストーンの一覧 (管理者のみ)。
+
+    達成日 (accomplished_date) の降順。削除 API で閉じたものは達成日が NULL のため末尾へ。
+    """
+    if not claims.get("admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    rows = (
+        db.query(MilestoneORM)
+        .filter(MilestoneORM.status == MILESTONE_CLOSED)
+        .order_by(
+            MilestoneORM.accomplished_date.is_(None),
+            MilestoneORM.accomplished_date.desc(),
+        )
+        .all()
+    )
+    return [m.to_dict() for m in rows]
 
 
 @router.get("/milestone/closed/{milestone_id}/events")

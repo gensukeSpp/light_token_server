@@ -1,7 +1,8 @@
 # マイルストーン所属イベント取得 API 仕様
 
 > **本ファイルは現行契約の正本です。** open/waiting 用 `GET /milestone/{milestone_id}/events` は一般ユーザー（非 admin 含む）が閲覧可（`require_token` のみ）、closed 用 `GET /milestone/closed/{milestone_id}/events` は管理者限定です。Issue #40 / PR #15 による差分の記録は `2026-10-15-milestone-events-group-name-auth-spec.md` を参照してください。
-> 変更理由・動機・テスト変更などの詳細は、差分記録 `2026-10-15-milestone-events-group-name-auth-spec.md` を参照。
+> **Issue #16 でレスポンスをホワイトリスト化し `summary` を非公開にしました（§3）。** 差分の記録は `2026-10-19-milestone-events-summary-exclusion-spec.md` を参照。
+> 変更理由・動機・テスト変更などの詳細は、差分記録 `2026-10-15-milestone-events-group-name-auth-spec.md` / `2026-10-19-milestone-events-summary-exclusion-spec.md` を参照。
 > フロント側仕様は `time-table-to-line/specs/2026-10-15-spec.md`。
 
 ## 1. 目的
@@ -15,13 +16,13 @@
 - **closed 用 `GET /milestone/closed/{milestone_id}/events` はアクセストークンの `admin` claim が真である管理者に限る。管理者以外は `403 Forbidden`。**
 - マイルストーンに所属するイベントは全グループから取得する。トークンの `group_id`、イベントの `group`、または操作者の所属グループによる絞り込みは行わない。
 - イベントの所属は `milestone_id` が指定のマイルストーン ID と一致することで判定する。
-- 成功時のレスポンスはイベントオブジェクトの JSON 配列とする。各要素は通常のイベント取得 API と同じ形式に加えて `group_name` を持つ。
+- 成功時のレスポンスはイベントオブジェクトの JSON 配列とする。各要素のキーは公開キーをホワイトリストで固定した形式（§3）とし、`summary` は含めない。
 - 対象イベントがない場合は `200 OK` と空配列 `[]` を返す。
 - イベント配列の順序は仕様で保証しない。
 
 ## 3. イベントレスポンス
 
-各イベントオブジェクトは次のキーを持つ。日時は既存イベント API と同じ形式 (`YYYY-MM-DDTHH:mm:ss.000Z`) とする。
+各イベントオブジェクトは次のキーを持つ（**公開キーのホワイトリスト。これ以外のキーは返さない**）。日時は既存イベント API と同じ形式 (`YYYY-MM-DDTHH:mm:ss.000Z`) とする。実装は `EventORM.MILESTONE_EVENT_KEYS` / `EventORM.to_milestone_dict()`（`app/models.py`）。
 
 | キー | 内容 |
 |---|---|
@@ -32,10 +33,11 @@
 | `start` | 開始日時 |
 | `end` | 終了日時 |
 | `title` | イベントタイトル |
-| `summary` | イベント概要。未設定の場合は `null` |
 | `progress` | 進捗。未設定の場合は `null` |
 | `milestone_id` | 所属マイルストーン ID |
 | `completed` | 完了状態 |
+
+> **`summary` は返さない（Issue #16）。** open/waiting 一覧は非 admin も閲覧するため、他グループのイベント概要文を露出させない。`summary` が必要な場合は `/event/all` `/event/user` `/group/all`（`EventORM.to_dict()` ベース）を利用する。open/waiting・closed の**両方**に適用される。
 
 ## 4. open / waiting マイルストーンのイベント取得
 
