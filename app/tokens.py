@@ -23,7 +23,6 @@ REFRESH_TOKEN_EXPIRE = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
 def _encode(payload: dict, expires_delta: timedelta) -> str:
     data = {**payload, "exp": datetime.now(timezone.utc) + expires_delta}
-    print(f"Signing token with secret (first 5): {SECRET_KEY[:5]}...")
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -58,10 +57,8 @@ def _bearer_token(request: Request) -> str | None:
         return None
     parts = auth.split(" ", 1)
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        print(f"Invalid Authorization header format: {auth}")
         return None
     token = parts[1].strip()
-    print(f"Found token in header: {token[:10]}...")
     return token
 
 
@@ -87,7 +84,6 @@ def get_token_claims(request: Request, expected_type: str | set[str]) -> dict:
         raise HTTPException(status_code=401, detail="missing token")
 
     claims = decode_token(token)
-    print(f"Decoded claims: {claims}")
 
     if claims.get("type") not in allowed:
         print(f"Wrong token type: {claims.get('type')}, expected: {allowed}")

@@ -35,11 +35,24 @@ def _db_url() -> str:
 
 DB_URL = os.getenv("DATABASE_URL") or _db_url()
 ENV = os.getenv("ENV", "development")
-# 開発用デフォルトを1回だけ設定し、本番では env 未設定時にのみ厳格に失敗させる。
-# 分岐による重複代入を排除し、いかなる環境でも SECRET_KEY が None にならないようにする。
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
-if ENV == "production" and not os.getenv("SECRET_KEY"):
-    raise RuntimeError("SECRET_KEY must be set in production")
+# SECRET_KEY は本番環境で必須。開発環境のみ明示的な既定値をフォールバックとして許可する。
+# ENV の既定値 (development) に依存せず、本番デプロイで ENV を設定し忘れた場合でも
+# 公開されている既定値で JWT が署名・検証されることを防ぐ。
+if ENV == "production":
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        raise RuntimeError("SECRET_KEY must be set in production")
+else:
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
+    if not os.getenv("SECRET_KEY"):
+        import warnings
+
+        warnings.warn(
+            "SECRET_KEY is not set; using insecure development default. "
+            "Set SECRET_KEY for non-development environments.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 # 本番環境ならこっち、削除しないでね
 # APP_URL = os.getenv("CALENDAR_TIMELINE", "https://calendar-to-timeline.ktde-z3837.workers.dev")
 # ローカルならこっち、削除しないでね
