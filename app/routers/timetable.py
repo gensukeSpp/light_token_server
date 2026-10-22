@@ -202,7 +202,9 @@ def update_event_item(
         raise HTTPException(status_code=404, detail="event not found")
     if body.summary is not None:
         target.summary = body.summary
-    if body.progress is not None:
+    # Issue #44: progress も「送られたか(None でも)」で判別し、明示的 null で解除できるようにする
+    # （milestone_id と同じパターン）。summary は「送られたら上書き」のままで良い。
+    if "progress" in body.model_fields_set:
         target.progress = body.progress
     # milestone_id の扱い: model_fields_set で「送られたか(None でも)」を判別
     # (update_milestone の accomplished_date と同じパターン)。

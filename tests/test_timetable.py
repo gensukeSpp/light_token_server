@@ -209,3 +209,20 @@ def test_refresh_with_access_bearer_is_allowed(client):
 def test_refresh_missing_token_returns_401(client):
     r = client.post("/refresh", follow_redirects=False)
     assert r.status_code == 401
+
+
+def test_event_update_progress_null_clears(client):
+    # Issue #44 (受入 2): progress に一度値を入れた後、null で解除できるか。
+    _login(client)
+    client.get("/timetable/auth", follow_redirects=False)
+    # 値を設定
+    r = client.post("/event/update/1", json={"progress": "done"})
+    assert r.status_code == 200
+    assert r.json()["progress"] == "done"
+    # null で解除
+    r2 = client.post("/event/update/1", json={"progress": None})
+    assert r2.status_code == 200
+    assert r2.json()["progress"] is None
+    # DB 反映を GET 側でも確認
+    ev = client.get("/event/all", follow_redirects=False).json()[0]
+    assert ev["progress"] is None
