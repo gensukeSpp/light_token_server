@@ -13,3 +13,4 @@
 | 2026-10-15 | [Milestone Event Retrieval API](2026-10-15-1-architecture.md) |
 | 2026-10-15 | [Milestone Events Group Name & Auth Relaxation](2026-10-15-2-architecture.md) |
 | 2026-10-19 | [Milestone Events Summary Exclusion & Closed Milestone List API](2026-10-19-architecture.md) |
+| 2026-10-22 | [Event Progress Explicit Null Clearance](2026-10-22-architecture.md) |
