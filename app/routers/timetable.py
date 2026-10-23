@@ -201,7 +201,7 @@ def _require_event_owner_or_admin(target: "EventORM", claims: dict) -> None:
         return
     raise HTTPException(
         status_code=403,
-        detail="not allowed to modify other member's event",
+        detail=f"not allowed to update other member's event: {target.id}",
     )
 
 
