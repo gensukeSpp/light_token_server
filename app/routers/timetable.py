@@ -167,12 +167,31 @@ def get_team_name(claims: dict = Depends(require_token), db: Session = Depends(g
     return [t.SHORTNAME for t in teams]
 
 
+def _require_event_create_owner_or_admin(staff_id: int, claims: dict) -> None:
+    """/event/add の staff_id を認証ユーザーと照合する (Issue #22)。
+
+    非 admin は本人の staff_id のみ許可。admin は他人名義の作成を許可する。
+    更新・削除用の _require_event_owner_or_admin は event オブジェクト基準なので、
+    作成時は body の素の staff_id を受ける本関数を使う。
+    claims は require_token 由来で、user_id / admin キーが常に存在する。
+    """
+    if staff_id == claims.get("user_id"):
+        return
+    if claims.get("admin"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="not allowed to create event for other member",
+    )
+
+
 @router.post("/event/add", status_code=201)
 def append_event_item(
     body: EventCreate,
     claims: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
+    _require_event_create_owner_or_admin(body.staff_id, claims)
     event = EventORM(
         staff_id=body.staff_id,
         group_id=body.group,
