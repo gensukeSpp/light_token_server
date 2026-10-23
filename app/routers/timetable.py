@@ -190,6 +190,21 @@ def append_event_item(
     return event.to_dict()
 
 
+def _require_event_owner_or_admin(target: "EventORM", claims: dict) -> None:
+    """イベントの更新・削除は作成者本人または admin のみ許可する (Issue #20)。
+
+    claims は require_token 由来で、user_id / admin キーが常に存在する。
+    """
+    if target.staff_id == claims.get("user_id"):
+        return
+    if claims.get("admin"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="not allowed to modify other member's event",
+    )
+
+
 @router.post("/event/update/{event_id}")
 def update_event_item(
     event_id: int,
@@ -200,6 +215,7 @@ def update_event_item(
     target = db.query(EventORM).filter(EventORM.id == event_id).first()
     if target is None:
         raise HTTPException(status_code=404, detail="event not found")
+    _require_event_owner_or_admin(target, claims)
     if body.summary is not None:
         target.summary = body.summary
     # Issue #44: progress も「送られたか(None でも)」で判別し、明示的 null で解除できるようにする
@@ -226,16 +242,13 @@ def update_event_dates(
     # Timeline/Calendar のドラッグ&ドロップによる日時移動・リサイズの一括保存。
     # フロント (useUpdateDateListMutation) が { data: [{id, start_time, end_time}] } を送る。
     # 更新対象イベントは、作成者本人のみ権限を持つ（他メンバーのイベントは触らせない）。
+    # Issue #20: admin は例外（本人 or admin）。
     updated: list[EventORM] = []
     for item in body.data:
         target = db.query(EventORM).filter(EventORM.id == item.id).first()
         if target is None:
             raise HTTPException(status_code=404, detail=f"event not found: {item.id}")
-        if target.staff_id != claims.get("user_id"):
-            raise HTTPException(
-                status_code=403,
-                detail=f"not allowed to update other member's event: {item.id}",
-            )
+        _require_event_owner_or_admin(target, claims)
         target.start_time = convert_str_to_date(item.start_time)
         target.end_time = convert_str_to_date(item.end_time)
         updated.append(target)
@@ -252,6 +265,7 @@ def remove_event_item(
     target = db.query(EventORM).filter(EventORM.id == event_id).first()
     if target is None:
         raise HTTPException(status_code=404, detail="event not found")
+    _require_event_owner_or_admin(target, claims)
     db.delete(target)
     db.commit()
     return {"deleted": event_id}

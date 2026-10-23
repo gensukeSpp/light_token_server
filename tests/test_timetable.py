@@ -226,3 +226,136 @@ def test_event_update_progress_null_clears(client):
     # DB 反映を GET 側でも確認
     ev = client.get("/event/all", follow_redirects=False).json()[0]
     assert ev["progress"] is None
+
+
+# ===== Issue #20: 更新・削除の所有者チェック（本人 or admin）=====
+
+def _add_event_staff(client, admin_token, staff_id) -> int:
+    """admin 権限で任意 staff_id のイベントを作成し、その id を返す。"""
+    r = client.post(
+        "/event/add",
+        headers=_bearer(admin_token),
+        json={
+            "staff_id": staff_id,
+            "group": 3,
+            "start_time": "2026-08-02T10:00:00.000Z",
+            "end_time": "2026-08-02T11:00:00.000Z",
+            "title": "other",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 201
+    return r.json()["id"]
+
+
+def test_event_update_other_members_event_forbidden(client):
+    # conftest の event 1 は staff_id=1001 所有。非 admin の別ユーザー 1002 は更新不可。
+    other = tokens.create_access_token(1002, 3, False)
+    r = client.post(
+        "/event/update/1",
+        headers=_bearer(other),
+        json={"summary": "hacked"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+
+
+def test_event_update_owner_non_admin_allowed(client):
+    # 非 admin でも本人のイベントは更新できる。
+    admin = tokens.create_access_token(1001, 3, True)
+    owner = tokens.create_access_token(1002, 3, False)
+    event_id = _add_event_staff(client, admin, 1002)
+
+    r = client.post(
+        f"/event/update/{event_id}",
+        headers=_bearer(owner),
+        json={"summary": "mine"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 200
+    assert r.json()["summary"] == "mine"
+
+
+def test_event_update_admin_can_modify_others(client):
+    # admin は他人のイベントも更新できる（ユーザー要件: admin は例外）。
+    admin = tokens.create_access_token(1001, 3, True)
+    event_id = _add_event_staff(client, admin, 1002)
+
+    r = client.post(
+        f"/event/update/{event_id}",
+        headers=_bearer(admin),
+        json={"summary": "by-admin"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 200
+    assert r.json()["summary"] == "by-admin"
+
+
+def test_event_remove_other_members_event_forbidden(client):
+    other = tokens.create_access_token(1002, 3, False)
+    r = client.delete("/event/remove/1", headers=_bearer(other), follow_redirects=False)
+    assert r.status_code == 403
+    # 削除が拒否されイベントが残っていること
+    remaining = [
+        e["id"]
+        for e in client.get(
+            "/event/all", headers=_bearer(other), follow_redirects=False
+        ).json()
+    ]
+    assert 1 in remaining
+
+
+def test_event_remove_owner_non_admin_allowed(client):
+    admin = tokens.create_access_token(1001, 3, True)
+    owner = tokens.create_access_token(1002, 3, False)
+    event_id = _add_event_staff(client, admin, 1002)
+
+    r = client.delete(
+        f"/event/remove/{event_id}", headers=_bearer(owner), follow_redirects=False
+    )
+    assert r.status_code == 200
+    assert r.json()["deleted"] == event_id
+
+
+def test_event_remove_admin_can_remove_others(client):
+    admin = tokens.create_access_token(1001, 3, True)
+    event_id = _add_event_staff(client, admin, 1002)
+
+    r = client.delete(
+        f"/event/remove/{event_id}", headers=_bearer(admin), follow_redirects=False
+    )
+    assert r.status_code == 200
+    assert r.json()["deleted"] == event_id
+
+
+def test_date_update_other_members_event_forbidden(client):
+    other = tokens.create_access_token(1002, 3, False)
+    r = client.post(
+        "/date/update",
+        headers=_bearer(other),
+        json={"data": [{"id": 1, "start_time": "x", "end_time": "y"}]},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+
+
+def test_date_update_admin_can_move_others_event(client):
+    admin = tokens.create_access_token(1001, 3, True)
+    event_id = _add_event_staff(client, admin, 1002)
+
+    r = client.post(
+        "/date/update",
+        headers=_bearer(admin),
+        json={
+            "data": [
+                {
+                    "id": event_id,
+                    "start_time": "2026-08-02T14:00:00.000Z",
+                    "end_time": "2026-08-02T15:00:00.000Z",
+                }
+            ]
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 200
+    assert r.json()[0]["id"] == event_id

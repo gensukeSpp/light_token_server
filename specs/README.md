@@ -25,6 +25,7 @@
 | [2026-10-15-milestone-events-group-name-auth-spec.md](./2026-10-15-milestone-events-group-name-auth-spec.md) | 2026-10-15 | **PR #15 の変更履歴（差分記録）**。権限緩和（open/waiting を非 admin にも許可）と `group_name` 付与の動機・実装箇所・テスト変更・影響範囲を記録。現行定義の正は上記の正本（10-13）を参照。※記載の「11 キー」は当時（`summary` 含む）の内容。Issue #16 で 10 キーに改訂済み |
 | [2026-10-19-milestone-events-summary-exclusion-spec.md](./2026-10-19-milestone-events-summary-exclusion-spec.md) | 2026-10-19 | **Issue #16 の変更履歴（差分記録）**。マイルストーン所属イベント API のレスポンスをホワイトリスト化して `summary` を非公開化（`EventORM.MILESTONE_EVENT_KEYS` / `to_milestone_dict()`）し、`_get_milestone_events` の `to_dict()` 二重呼び出しを解消。正本（10-13）§3 も同時改訂。`test_milestone.py` 47 passed / 全体 74 passed |
 | [2026-10-22-progress-null-spec.md](./2026-10-22-progress-null-spec.md) | 2026-10-22 | **Issue #44（バックエンド分）の変更履歴（差分記録）**。イベント `progress` の更新判定を `model_fields_set` 化し、明示的 null 送信で「未定」へ解除可能に（`milestone_id` と同型）。`test_timetable.py` 20 passed / 全体 79 passed |
+| [2026-10-23-event-owner-permission-spec.md](./2026-10-23-event-owner-permission-spec.md) | 2026-10-23 | **Issue #20 の変更履歴（差分記録）**。イベントの更新・削除・日時移動に所有者チェック（**本人 or admin**）を追加し、共通ヘルパ `_require_event_owner_or_admin` で `/event/update` `/event/remove` `/date/update` を統一。権限契約は `.hermes/rules/milestones.md` に追記。`test_timetable.py` 26 passed / 全体 87 passed |
 
 ## 最新仕様の把握方法
 

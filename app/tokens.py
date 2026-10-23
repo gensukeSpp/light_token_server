@@ -86,7 +86,6 @@ def get_token_claims(request: Request, expected_type: str | set[str]) -> dict:
     claims = decode_token(token)
 
     if claims.get("type") not in allowed:
-        print(f"Wrong token type: {claims.get('type')}, expected: {allowed}")
         raise HTTPException(status_code=401, detail="wrong token type")
 
     print("Token validated successfully")
