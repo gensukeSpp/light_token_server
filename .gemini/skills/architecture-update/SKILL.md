@@ -11,6 +11,7 @@ This skill automates the process of generating high-level architecture snapshots
 1. **実装確認:**
    - `tasks/` 以下の該当Issue/タスクの `README.md` を読み、完了条件（Done）が全て満たされているか確認する。
    - 満たされていない場合は、実装タスクを優先し、このスキルの実行を中断する。
+   - 満たされている場合のみ、次のステップ (3. Generate Snapshot → 4. Update Registry) へ進みます。
 
 2. **Identify Changes:**
    - Use `invoke_agent` with the `codebase_investigator` to:
