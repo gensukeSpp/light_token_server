@@ -359,3 +359,62 @@ def test_date_update_admin_can_move_others_event(client):
     )
     assert r.status_code == 200
     assert r.json()[0]["id"] == event_id
+
+
+# ===== Issue #22: /event/add の staff_id 検証（本人 or admin）=====
+
+def _create_event_body(staff_id: int) -> dict:
+    return {
+        "staff_id": staff_id,
+        "group": 3,
+        "start_time": "2026-08-02T10:00:00.000Z",
+        "end_time": "2026-08-02T11:00:00.000Z",
+        "title": "new event",
+    }
+
+
+def test_event_add_self_non_admin_allowed(client):
+    # 受入 1: 非 admin は自分の staff_id で作成できる。
+    me = tokens.create_access_token(1002, 3, False)
+    r = client.post(
+        "/event/add", json=_create_event_body(1002), headers=_bearer(me),
+        follow_redirects=False,
+    )
+    assert r.status_code == 201
+    assert r.json()["staff_id"] == 1002
+
+
+def test_event_add_other_member_forbidden_for_non_admin(client):
+    # 受入 2: 非 admin が他人の staff_id を指定すると 403 となり、イベントは作成されない。
+    me = tokens.create_access_token(1002, 3, False)
+    before = client.get("/event/all", headers=_bearer(me), follow_redirects=False).json()
+    r = client.post(
+        "/event/add", json=_create_event_body(1001), headers=_bearer(me),
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    # 一覧に混入していないこと（conftest の事前投入 1 件のまま）
+    after = client.get("/event/all", headers=_bearer(me), follow_redirects=False).json()
+    assert len(after) == len(before) == 1
+    assert all(e["staff_id"] == 1001 for e in after)  # 1002 名義のイベントが増えていない
+
+
+def test_event_add_admin_can_create_for_others(client):
+    # 受入 3: admin は他人の staff_id でも作成できる。
+    admin = tokens.create_access_token(1001, 3, True)
+    r = client.post(
+        "/event/add", json=_create_event_body(1002), headers=_bearer(admin),
+        follow_redirects=False,
+    )
+    assert r.status_code == 201
+    assert r.json()["staff_id"] == 1002
+
+
+def test_event_add_nonexistent_staff_forbidden_for_non_admin(client):
+    # エッジ: 非 admin が存在しない staff_id を指定しても 403（claims との不一致として拒否）。
+    me = tokens.create_access_token(1002, 3, False)
+    r = client.post(
+        "/event/add", json=_create_event_body(9999), headers=_bearer(me),
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
