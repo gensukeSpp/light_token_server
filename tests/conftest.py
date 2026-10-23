@@ -31,6 +31,12 @@ def db_session_factory():
     user.TEAM_CODE = 3
     db.add(user)
     db.add(StaffLogin(1001, "secret", True))
+    # Issue #20: 非 admin の登録ユーザー（本人 or admin 権限チェックの検証用）
+    user2 = User(1002)
+    user2.DISPLAY = True
+    user2.TEAM_CODE = 3
+    db.add(user2)
+    db.add(StaffLogin(1002, "secret", False))
     team = Team(3)
     team.NAME = "Team A"
     team.SHORTNAME = "SHORT_A"

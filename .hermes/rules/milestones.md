@@ -39,6 +39,11 @@
   所属イベントも全グループから取得し、トークンの `group_id` では絞り込まない。
 - `GET /milestone/closed/{milestone_id}/events` も admin のみ。closed milestone のイベントを全グループから取得し、
   open / waiting 用 endpoint と同じイベント形式で返す。
+- **イベントの更新・削除・日時移動は「作成者本人 or admin」のみ**（Issue #20, 2026-10-23）。
+  対象: `POST /event/update/{id}` / `DELETE /event/remove/{id}` / `POST /date/update`。
+  実装は共通ヘルパ `_require_event_owner_or_admin(target, claims)`。本人（`target.staff_id == claims["user_id"]`）
+  または admin（`claims["admin"]`）以外は 403。存在しないイベントは先に 404（判定順は 404 → 403）。
+  差分記録: `specs/2026-10-23-event-owner-permission-spec.md`
 
 ## Color rules
 - 10 固定パターン: ` #9c27b0 #009688 #795548 #607d8b #e91e63 #3f51b5 #00bcd4 #ff5722 #8bc34a #ff9800`
@@ -72,7 +77,9 @@
   - closed 化されたマイルストーンは `/milestone/all`(open + waiting のみ)から自動で外れ、
     所属イベントはデフォルト色 `#2196f3` に戻る(フロント変更不要)
 - `POST /event/add` — `milestone_id` optional 追加
-- `POST /event/update/{id}` — `completed` 対応。`milestone_id` は `model_fields_set` で判別し、明示的 `null` 送信で「所属なし」(milestone_id=None) として保存可(2026-09 追加。色のデフォルト復帰は未実装)
+- `POST /event/update/{id}` — `completed` 対応。`milestone_id` は `model_fields_set` で判別し、明示的 `null` 送信で「所属なし」(milestone_id=None) として保存可(2026-09 追加。色のデフォルト復帰は未実装)。**本人 or admin のみ**(Issue #20, 2026-10-23)
+- `DELETE /event/remove/{id}` — **本人 or admin のみ**(Issue #20, 2026-10-23)。非許可は 403 でイベントは残存
+- `POST /date/update` — 日時移動・リサイズの一括保存。**本人 or admin のみ**(Issue #20, 2026-10-23)。非許可は 403
 
 ## UI conventions
 - Japanese date format (UTC+9) for display only (stored as-is)
