@@ -54,9 +54,9 @@ else:
             stacklevel=2,
         )
 # 本番環境ならこっち、削除しないでね
-# APP_URL = os.getenv("CALENDAR_TIMELINE", "https://calendar-to-timeline.ktde-z3837.workers.dev")
+APP_URL = os.getenv("CALENDAR_TIMELINE", "https://calendar-to-timeline.ktde-z3837.workers.dev")
 # ローカルならこっち、削除しないでね
-APP_URL = os.getenv("CALENDAR_TIMELINE", "http://localhost:5173")
+# APP_URL = os.getenv("CALENDAR_TIMELINE", "http://localhost:5173")
 
 # アクセストークン/リフレッシュトークンの有効期限(限定組織向けに長め。env で調整可)
 ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "24"))
